@@ -1,6 +1,3 @@
-/* Import Google Font */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-
 /* Basic Reset & Global Styles */
 * {
     margin: 0;
@@ -9,25 +6,35 @@
 }
 
 body {
-    font-family: 'Inter', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: #f4f7f9;
     color: #333;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    padding: 20px;
+    margin: 0; /* Explicitly remove default browser margin */
 }
 
 /* Main App Container */
 #app-container {
     display: grid;
     grid-template-columns: 1fr 2fr 1fr;
+    grid-template-rows: 100%; /* Ensure a single row takes full height */
+    grid-template-areas: "market main portfolio"; /* Define named grid areas */
     gap: 20px;
     width: 100%;
-    max-width: 1400px;
-    height: 90vh;
+    height: 100vh;
+    padding: 20px;
 }
+
+/* Assign panels to their specific grid areas */
+#market-panel {
+    grid-area: market;
+}
+#main-panel {
+    grid-area: main;
+}
+#portfolio-panel {
+    grid-area: portfolio;
+}
+
 
 /* Panel Styling */
 .panel {
@@ -40,6 +47,7 @@ body {
     gap: 20px;
     overflow-y: auto;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    min-height: 0; /* Fix for flexbox overflow in grid */
 }
 
 .panel-title {
@@ -130,7 +138,7 @@ body {
 }
 
 #quantity-input {
-    font-family: 'Inter', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: #ffffff;
     color: #333;
     border: 1px solid #ced4da;
@@ -148,7 +156,7 @@ body {
 }
 
 .trade-button {
-    font-family: 'Inter', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     border: none;
     border-radius: 6px;
     padding: 12px;
