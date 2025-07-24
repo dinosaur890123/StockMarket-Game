@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chrome & Circuits Exchange</title>
     <link rel="stylesheet" href="style.css">
+    <!-- The defer attribute is crucial here. It tells the browser to wait for the HTML to load before running the script. -->
+    <script type="module" src="game.js" defer></script>
 </head>
 <body>
     <div id="app-container">
@@ -12,7 +14,6 @@
         <div id="market-panel" class="panel">
             <h2 class="panel-title">Market Watch</h2>
             <div id="market-list">
-                <!-- Stock data will be dynamically inserted here by JavaScript -->
                 <div class="stock-item-placeholder">Loading market data...</div>
             </div>
         </div>
@@ -21,7 +22,6 @@
         <div id="main-panel" class="panel">
             <h2 class="panel-title" id="selected-stock-title">Select a Stock</h2>
             <div id="chart-container">
-                <!-- A charting library could go here, but for now, it's a placeholder -->
                 <div class="chart-placeholder">Price chart will be displayed here.</div>
             </div>
             <div id="trade-container">
@@ -32,7 +32,6 @@
             <div id="news-feed" class="sub-panel">
                 <h3 class="sub-panel-title">News Feed</h3>
                 <ul id="news-list">
-                    <!-- News items will be dynamically inserted here -->
                     <li>Connecting to news stream...</li>
                 </ul>
             </div>
@@ -49,56 +48,10 @@
             <div id="player-shares" class="sub-panel">
                 <h3 class="sub-panel-title">Your Assets</h3>
                 <div id="shares-list">
-                    <!-- Player's shares will be dynamically inserted here -->
                     <p>Loading assets...</p>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Firebase SDKs -->
-    <script type="module">
-        // Import the functions you need from the SDKs you need
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-analytics.js";
-        // Imports needed for the game to function
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
-        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-functions.js";
-        
-        // Your web app's Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyDx1XsUhmqchGCHEiB0dcF8cV6JDCp39D0",
-            authDomain: "stock-market-game-f0922.firebaseapp.com",
-            projectId: "stock-market-game-f0922",
-            storageBucket: "stock-market-game-f0922.appspot.com", // Corrected domain
-            messagingSenderId: "860554882495",
-            appId: "1:860554882495:web:c20583fed1530008b5850a",
-            measurementId: "G-3V60XQ69VD"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const functions = getFunctions(app);
-
-        // Make services available to your game.js script
-        window.firebaseServices = { 
-            auth, 
-            db, 
-            functions,
-            onAuthStateChanged, 
-            doc, 
-            onSnapshot, 
-            collection, 
-            signInAnonymously,
-            httpsCallable
-        };
-    </script>
-    
-    <!-- Your Game Logic -->
-    <script type="module" src="game.js"></script>
 </body>
 </html>
