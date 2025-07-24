@@ -1,9 +1,15 @@
+// Wait for the DOM and Firebase services to be ready
 document.addEventListener('DOMContentLoaded', () => {
-    const { auth, db, onAuthStateChanged, doc, onSnapshot, collection, signInAnonymously } = window.firebaseServices;
+    // Access Firebase services from the window object
+    const { auth, db, functions, onAuthStateChanged, doc, onSnapshot, collection, signInAnonymously, httpsCallable } = window.firebaseServices;
+
+    // --- STATE MANAGEMENT ---
     let currentUserId = null;
     let selectedStockId = null;
-    let marketData = {};
+    let marketData = {}; // To store all company data locally for quick access
+    let isTrading = false; // To prevent multiple trades at once
 
+    // --- DOM ELEMENTS ---
     const marketList = document.getElementById('market-list');
     const playerCashEl = document.getElementById('player-cash');
     const playerNetWorthEl = document.getElementById('player-net-worth');
@@ -15,6 +21,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const sellButton = document.getElementById('sell-button');
     const quantityInput = document.getElementById('quantity-input');
 
+    // --- RENDER FUNCTIONS ---
+
+    /**
+     * Renders the list of stocks in the Market Watch panel.
+     * @param {Array} companies - An array of company objects from Firestore.
+     */
     function renderMarket(companies) {
         marketList.innerHTML = ''; // Clear existing list
         companies.forEach(company => {
@@ -32,17 +44,22 @@ document.addEventListener('DOMContentLoaded', () => {
             stockItem.innerHTML = `
                 <span>${company.id}</span>
                 <span class="stock-price ${priceClass}">
-                    ₵${company.currentPrice.toFixed(2)}
+                    $${company.currentPrice.toFixed(2)}
                 </span>
             `;
             stockItem.addEventListener('click', () => selectStock(company.id));
             marketList.appendChild(stockItem);
         });
     }
+
+    /**
+     * Renders the player's portfolio (cash, net worth, shares).
+     * @param {Object} playerData - The player's document data from Firestore.
+     */
     function renderPortfolio(playerData) {
         if (!playerData) return;
 
-        playerCashEl.textContent = `₵${playerData.cash.toFixed(2)}`;
+        playerCashEl.textContent = `$${playerData.cash.toFixed(2)}`;
         sharesListEl.innerHTML = '';
         let totalSharesValue = 0;
 
@@ -53,14 +70,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const companyPrice = marketData[companyId]?.currentPrice || 0;
                     const value = quantity * companyPrice;
                     totalSharesValue += value;
-                    shareItem.innerHTML = `${quantity} x ${companyId} <span>@ ₵${value.toFixed(2)}</span>`;
+                    shareItem.innerHTML = `${quantity} x ${companyId} <span>@ $${value.toFixed(2)}</span>`;
                     sharesListEl.appendChild(shareItem);
                 }
             }
         }
         
         const netWorth = playerData.cash + totalSharesValue;
-        playerNetWorthEl.textContent = `₵${netWorth.toFixed(2)}`;
+        playerNetWorthEl.textContent = `$${netWorth.toFixed(2)}`;
     }
 
     /**
@@ -85,15 +102,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function selectStock(companyId) {
         selectedStockId = companyId;
         selectedStockTitleEl.textContent = marketData[companyId]?.id || "SELECT A STOCK";
-        // Re-render market to show selection highlight
         renderMarket(Object.values(marketData));
-        // TODO: In the future, render the chart for this stock
     }
 
     /**
-     * Placeholder function for buying shares.
+     * Calls the backend 'processTrade' function.
+     * @param {string} action - 'buy' or 'sell'.
      */
-    function buyShares() {
+    function processTrade(action) {
+        if (isTrading) {
+            console.log("Trade already in progress.");
+            return;
+        }
         if (!selectedStockId || !currentUserId) {
             alert("Please select a stock first.");
             return;
@@ -104,55 +124,58 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // TODO: This is where you would call a Firebase Function
-        console.log(`Attempting to BUY ${quantity} of ${selectedStockId}`);
-        alert("Trade functionality is not yet implemented. This will call a Firebase Function.");
-    }
+        isTrading = true;
+        buyButton.disabled = true;
+        sellButton.disabled = true;
+        buyButton.textContent = '...';
+        sellButton.textContent = '...';
 
-    /**
-     * Placeholder function for selling shares.
-     */
-    function sellShares() {
-        if (!selectedStockId || !currentUserId) {
-            alert("Please select a stock first.");
-            return;
-        }
-        const quantity = parseInt(quantityInput.value);
-        if (isNaN(quantity) || quantity <= 0) {
-            alert("Please enter a valid quantity.");
-            return;
-        }
-        
-        // TODO: This is where you would call a Firebase Function
-        console.log(`Attempting to SELL ${quantity} of ${selectedStockId}`);
-        alert("Trade functionality is not yet implemented. This will call a Firebase Function.");
-    }
+        // Get a reference to the callable function
+        const tradeFunction = httpsCallable(functions, 'processTrade');
 
+        // Call the function with the required data
+        tradeFunction({ companyId: selectedStockId, quantity: quantity, action: action })
+            .then((result) => {
+                // The function was successful
+                console.log(result.data.message);
+                // Optional: Show a success message to the user
+                // For now, we'll just log it. A better UI would be a temporary notification.
+            })
+            .catch((error) => {
+                // The function failed
+                console.error("Trade failed:", error);
+                alert(`Error: ${error.message}`); // Show the error from the server
+            })
+            .finally(() => {
+                // Re-enable buttons regardless of success or failure
+                isTrading = false;
+                buyButton.disabled = false;
+                sellButton.disabled = false;
+                buyButton.textContent = 'BUY';
+                sellButton.textContent = 'SELL';
+                quantityInput.value = '';
+            });
+    }
 
     // --- FIREBASE LISTENERS ---
 
-    /**
-     * Sets up all the real-time listeners to Firestore.
-     */
     function setupListeners() {
         if (!currentUserId) return;
 
-        // Listen for changes in the market data
         onSnapshot(collection(db, 'market'), (snapshot) => {
             const companies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderMarket(companies);
-            // Re-render portfolio if a stock price changes
-            onSnapshot(doc(db, 'players', currentUserId), (playerDoc) => {
-                renderPortfolio(playerDoc.data());
-            });
+            if (currentUserId) {
+                onSnapshot(doc(db, 'players', currentUserId), (playerDoc) => {
+                    renderPortfolio(playerDoc.data());
+                });
+            }
         });
 
-        // Listen for changes to the player's own data
         onSnapshot(doc(db, 'players', currentUserId), (doc) => {
             renderPortfolio(doc.data());
         });
 
-        // Listen for new news items
         onSnapshot(collection(db, 'news'), (snapshot) => {
             const newsItems = snapshot.docs.map(doc => doc.data());
             renderNews(newsItems);
@@ -161,24 +184,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- INITIALIZATION ---
 
-    // Listen for authentication state changes
     onAuthStateChanged(auth, user => {
         if (user) {
-            // User is signed in.
             currentUserId = user.uid;
             userIdEl.textContent = currentUserId;
             console.log("User authenticated with ID:", currentUserId);
             setupListeners();
         } else {
-            // User is signed out. Sign them in anonymously.
             console.log("No user found. Signing in anonymously...");
             signInAnonymously(auth).catch(error => {
                 console.error("Anonymous sign-in failed:", error);
             });
         }
     });
-
-    // Add event listeners for trade buttons
-    buyButton.addEventListener('click', buyShares);
-    sellButton.addEventListener('click', sellShares);
+    buyButton.addEventListener('click', () => processTrade('buy'));
+    sellButton.addEventListener('click', () => processTrade('sell'));
 });
