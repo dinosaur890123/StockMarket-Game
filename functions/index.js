@@ -16,7 +16,7 @@ exports.createPlayerOnSignUp = functions.auth.user().onCreate((user) => {
 
   // Set the starting data for the new player
   return playerRef.set({
-    cash: 2000, // <-- Here is the new starting cash amount
+    cash: 20000, // <-- Here is the new starting cash amount
     shares: {},   // Start with no shares
   });
 });
