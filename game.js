@@ -52,10 +52,13 @@ function renderMarket(companies) {
             stockItem.classList.add('selected');
         }
         stockItem.dataset.id = company.id;
-        // Use a placeholder for dailyChange if it doesn't exist
         const priceClass = (company.dailyChange || 0) >= 0 ? 'price-up' : 'price-down';
+        
+        // **CHANGE:** Display the ticker if it exists, otherwise fall back to the company ID.
+        const displayName = company.ticker || company.id;
+
         stockItem.innerHTML = `
-            <span>${company.id}</span>
+            <span>${displayName}</span>
             <span class="stock-price ${priceClass}">
                 $${company.currentPrice.toFixed(2)}
             </span>
@@ -66,18 +69,29 @@ function renderMarket(companies) {
 }
 
 function renderPortfolio(playerData) {
-    if (!playerData || !playerCashEl) return;
+    if (!playerData || !playerCashEl) {
+        // If there's no player data yet, show a default state.
+        playerCashEl.textContent = '$0.00';
+        playerNetWorthEl.textContent = '$0.00';
+        return;
+    }
+
     playerCashEl.textContent = `$${playerData.cash.toFixed(2)}`;
     sharesListEl.innerHTML = '';
     let totalSharesValue = 0;
+
     if (playerData.shares) {
         for (const [companyId, quantity] of Object.entries(playerData.shares)) {
-            if (quantity > 0) {
+            if (quantity > 0 && marketData[companyId]) { // Ensure market data for the share exists
                 const shareItem = document.createElement('p');
-                const companyPrice = marketData[companyId]?.currentPrice || 0;
-                const value = quantity * companyPrice;
+                const company = marketData[companyId];
+                const value = quantity * company.currentPrice;
                 totalSharesValue += value;
-                shareItem.innerHTML = `${quantity} x ${companyId} <span>@ $${value.toFixed(2)}</span>`;
+
+                // **CHANGE:** Display the ticker in the portfolio list.
+                const displayName = company.ticker || company.id;
+
+                shareItem.innerHTML = `${quantity} x ${displayName} <span>@ $${value.toFixed(2)}</span>`;
                 sharesListEl.appendChild(shareItem);
             }
         }
@@ -99,7 +113,8 @@ function renderNews(newsItems) {
 // --- GAME LOGIC ---
 function selectStock(companyId) {
     selectedStockId = companyId;
-    selectedStockTitleEl.textContent = marketData[companyId]?.id || "SELECT A STOCK";
+    // **CHANGE:** Show the full company ID (the name) in the title for clarity.
+    selectedStockTitleEl.textContent = companyId || "SELECT A STOCK";
     renderMarket(Object.values(marketData));
 }
 
@@ -144,21 +159,23 @@ function setupListeners() {
     onSnapshot(collection(db, 'market'), (snapshot) => {
         const companies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderMarket(companies);
-        if (currentUserId) {
-            // This nested listener ensures portfolio is re-rendered when market prices change
-            onSnapshot(doc(db, 'players', currentUserId), (playerDoc) => {
-                if(playerDoc.exists()) {
-                    renderPortfolio(playerDoc.data());
-                }
-            });
-        }
+        // Re-render portfolio when market prices change, as asset values will change.
+        const playerDocRef = doc(db, 'players', currentUserId);
+        onSnapshot(playerDocRef, (playerDoc) => {
+            if(playerDoc.exists()) {
+                renderPortfolio(playerDoc.data());
+            }
+        });
     });
+    
     // This listener handles direct changes to the player's data (like cash after a trade)
-    onSnapshot(doc(db, 'players', currentUserId), (doc) => {
+    const playerDocRef = doc(db, 'players', currentUserId);
+    onSnapshot(playerDocRef, (doc) => {
         if(doc.exists()){
             renderPortfolio(doc.data());
         }
     });
+
     onSnapshot(collection(db, 'news'), (snapshot) => {
         const newsItems = snapshot.docs.map(doc => doc.data());
         renderNews(newsItems);
