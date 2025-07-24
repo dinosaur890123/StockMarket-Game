@@ -1,25 +1,69 @@
-<DOCTYPE! HTML>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Market Exchange</title>
+    <title>Chrome & Circuits Exchange</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div id="app-container">
+    <div id="app-container">
+        <!-- Left Panel: Market Overview -->
         <div id="market-panel" class="panel">
-        <h2 class="panel-title">MARKET WATCH</h2>
-        <div id="market-list">
-            
-        <div class="stock-item-placeholder">Loading market data...</div>
-        </div>
+            <h2 class="panel-title">Market Watch</h2>
+            <div id="market-list">
+           
+            <div class="stock-item-placeholder">Loading market data...</div>
+            </div>
         </div>
 
+        <!-- Center Panel: Main Terminal -->
+        <div id="main-panel" class="panel">
+            <h2 class="panel-title" id="selected-stock-title">Select a Stock</h2>
+            <div id="chart-container">
+                <!-- A charting library could go here, but for now, it's a placeholder -->
+                <div class="chart-placeholder">Price chart will be displayed here.</div>
+            </div>
+            <div id="trade-container">
+                <input type="number" id="quantity-input" placeholder="QTY" min="1">
+                <button id="buy-button" class="trade-button buy">BUY</button>
+                <button id="sell-button" class="trade-button sell">SELL</button>
+            </div>
+            <div id="news-feed" class="sub-panel">
+                <h3 class="sub-panel-title">News Feed</h3>
+                <ul id="news-list">
+                    <!-- News items will be dynamically inserted here -->
+                    <li>Connecting to news stream...</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Right Panel: Player Portfolio -->
+        <div id="portfolio-panel" class="panel">
+            <h2 class="panel-title">Portfolio</h2>
+            <div id="player-stats" class="sub-panel">
+                 <p><strong>USER ID:</strong> <span id="user-id">Authenticating...</span></p>
+                 <p><strong>CASH:</strong> <span id="player-cash">$0.00</span></p>
+                 <p><strong>NET WORTH:</strong> <span id="player-net-worth">$0.00</span></p>
+            </div>
+            <div id="player-shares" class="sub-panel">
+                <h3 class="sub-panel-title">Your Assets</h3>
+                <div id="shares-list">
+                    <!-- Player's shares will be dynamically inserted here -->
+                    <p>Loading assets...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <!-- You will get these from your Firebase project settings -->
 <script type="module">
   // Import the functions you need from the SDKs you need
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-analytics.js";
-
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
   const firebaseConfig = {
     apiKey: "AIzaSyDx1XsUhmqchGCHEiB0dcF8cV6JDCp39D0",
     authDomain: "stock-market-game-f0922.firebaseapp.com",
@@ -34,5 +78,8 @@
   const app = initializeApp(firebaseConfig);
   const analytics = getAnalytics(app);
 </script>
+    
+    <!-- Your Game Logic -->
+    <script type="module" src="game.js"></script>
 </body>
 </html>
