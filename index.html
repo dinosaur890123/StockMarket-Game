@@ -3,9 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Market</title>
+    <title>Stock Market Exchange</title>
 </head>
 <body>
+<div id="app-container">
+        <div id="market-panel" class="panel">
+        <h2 class="panel-title">MARKET WATCH</h2>
+        <div id="market-list">
+            
+        <div class="stock-item-placeholder">Loading market data...</div>
+        </div>
+        </div>
 
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-analytics.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDx1XsUhmqchGCHEiB0dcF8cV6JDCp39D0",
+    authDomain: "stock-market-game-f0922.firebaseapp.com",
+    projectId: "stock-market-game-f0922",
+    storageBucket: "stock-market-game-f0922.firebasestorage.app",
+    messagingSenderId: "860554882495",
+    appId: "1:860554882495:web:c20583fed1530008b5850a",
+    measurementId: "G-3V60XQ69VD"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
 </body>
 </html>
