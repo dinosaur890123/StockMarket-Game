@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { getFirestore, doc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, collection, getDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-functions.js";
 
 // Your web app's Firebase configuration
@@ -150,22 +150,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- FIREBASE LISTENERS ---
     function setupListeners() {
         if (!currentUserId) return;
+        let latestMarket = null;
+        let latestPlayer = null;
+
+        // Helper to render portfolio only when both are available
+        function tryRenderPortfolio() {
+            if (latestMarket && latestPlayer) {
+                renderMarket(latestMarket);
+                renderPortfolio(latestPlayer);
+            }
+        }
+
+        // Market listener
         onSnapshot(collection(db, 'market'), (snapshot) => {
-            const companies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            renderMarket(companies);
-            const playerDocRef = doc(db, 'players', currentUserId);
-            onSnapshot(playerDocRef, (playerDoc) => {
-                if(playerDoc.exists()) {
-                    renderPortfolio(playerDoc.data());
-                }
-            });
+            latestMarket = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            tryRenderPortfolio();
         });
+
+        // Player listener
         const playerDocRef = doc(db, 'players', currentUserId);
-        onSnapshot(playerDocRef, (doc) => {
-            if(doc.exists()){
-                renderPortfolio(doc.data());
+        onSnapshot(playerDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+                latestPlayer = docSnap.data();
+                tryRenderPortfolio();
             }
         });
+
+        // News listener
         onSnapshot(collection(db, 'news'), (snapshot) => {
             const newsItems = snapshot.docs.map(doc => doc.data());
             renderNews(newsItems);
