@@ -127,12 +127,13 @@ onAuthStateChanged(auth, user => {
 
 const initializeMarketInFirestore = async () => {
     console.log("Checking if market needs initialization in Firestore...");
+    // ADDED: Volatility rating for each company. Higher number means bigger price swings.
     const initialCompanies = [
-        { ticker: 'INNV', name: 'Innovate Corp', sector: 'Tech', basePrice: 150.00 },
-        { ticker: 'HLTH', name: 'Healthwell Inc.', sector: 'Healthcare', basePrice: 220.00 },
-        { ticker: 'ENRG', name: 'Synergy Power', sector: 'Energy', basePrice: 85.50 },
-        { ticker: 'CONS', name: 'Staple Goods Co.', sector: 'Consumer', basePrice: 120.75 },
-        { ticker: 'FINX', name: 'Finix Capital', sector: 'Finance', basePrice: 310.25 },
+        { ticker: 'INNV', name: 'Innovate Corp', sector: 'Tech', basePrice: 150.00, volatility: 1.5 },
+        { ticker: 'HLTH', name: 'Healthwell Inc.', sector: 'Healthcare', basePrice: 220.00, volatility: 0.8 },
+        { ticker: 'ENRG', name: 'Synergy Power', sector: 'Energy', basePrice: 85.50, volatility: 1.3 },
+        { ticker: 'CONS', name: 'Staple Goods Co.', sector: 'Consumer', basePrice: 120.75, volatility: 0.7 },
+        { ticker: 'FINX', name: 'Finix Capital', sector: 'Finance', basePrice: 310.25, volatility: 1.0 },
     ];
 
     const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stocks`);
@@ -148,7 +149,8 @@ const initializeMarketInFirestore = async () => {
                 name: company.name,
                 sector: company.sector,
                 price: company.basePrice,
-                history: [company.basePrice]
+                history: [company.basePrice],
+                volatility: company.volatility // ADDED: Saving volatility to Firestore
             });
         });
         await batch.commit();
@@ -234,8 +236,12 @@ const executeTransaction = async (ticker, quantity, type) => {
         }
     }
     
+    // UPDATED: Price impact now considers the stock's volatility
+    const stock = stockData[ticker];
+    const volatility = stock.volatility || 1.0; // Default to 1 if volatility isn't set
     const priceImpactFactor = 0.005;
-    const priceChangePercentage = type === 'BUY' ? (1 + priceImpactFactor * (quantity / 100)) : (1 - priceImpactFactor * (quantity / 100));
+    const adjustedImpact = priceImpactFactor * volatility;
+    const priceChangePercentage = type === 'BUY' ? (1 + adjustedImpact * (quantity / 100)) : (1 - adjustedImpact * (quantity / 100));
     const newPrice = Math.max(0.01, price * priceChangePercentage);
 
     try {
@@ -359,7 +365,13 @@ const triggerNewsEvent = async () => {
     if (stocksToUpdate.length > 0) {
         stocksToUpdate.forEach(stock => {
             const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, stock.id);
-            const newPrice = Math.max(0.01, stock.price * event.multiplier);
+            // UPDATED: News event impact is now scaled by the stock's volatility
+            const volatility = stock.volatility || 1.0;
+            const baseChange = event.multiplier - 1; // e.g., 1.15 -> 0.15
+            const adjustedChange = baseChange * volatility;
+            const finalMultiplier = 1 + adjustedChange;
+            const newPrice = Math.max(0.01, stock.price * finalMultiplier);
+
             const newHistory = [...stock.history.slice(-29), newPrice];
             batch.update(stockRef, { price: newPrice, history: newHistory });
         });
