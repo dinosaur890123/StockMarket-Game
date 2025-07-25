@@ -1,46 +1,49 @@
-const functions = require("firebase-functions");
+// Import the necessary modules using the correct paths
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onUserCreated } = require("firebase-functions/v2/identity"); // Corrected import path
 const admin = require("firebase-admin");
-admin.initializeApp();
 
+// Initialize the Firebase Admin SDK
+admin.initializeApp();
 const db = admin.firestore();
 
 /**
- * Creates a new player document in Firestore when a new user signs up.
- * This function sets the starting cash for every new player.
+ * Creates a new player document in Firestore when a new user is created.
+ * This uses the new v2 'onUserCreated' trigger.
  */
-exports.createPlayerOnSignUp = functions.auth.user().onCreate((user) => {
-  const userId = user.uid;
+exports.createPlayerOnSignUp = onUserCreated((user) => { // Corrected function name
+  const userRecord = user.data; // The user data is in the .data property
+  const userId = userRecord.uid;
   const playerRef = db.collection("players").doc(userId);
 
-  console.log(`Creating new player document for user: ${userId}`);
+  console.log(`v2: Creating new player document for user: ${userId}`);
 
   // Set the starting data for the new player
   return playerRef.set({
-    cash: 20000, // <-- Here is the new starting cash amount
+    cash: 20000, // Start with 20,000
     shares: {},   // Start with no shares
   });
 });
 
-
 /**
  * A callable function to process a trade (buy or sell).
- * Ensures all logic is handled securely on the server.
+ * This uses the new v2 'onCall' trigger.
  */
-exports.processTrade = functions.https.onCall(async (data, context) => {
+exports.processTrade = onCall(async (request) => {
   // Ensure the user is authenticated.
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
+  if (!request.auth) {
+    throw new HttpsError(
       "unauthenticated",
       "You must be logged in to make a trade."
     );
   }
 
-  const userId = context.auth.uid;
-  const { companyId, quantity, action } = data; // action is 'buy' or 'sell'
+  const userId = request.auth.uid;
+  const { companyId, quantity, action } = request.data; // Data is in request.data
   const quantityNum = parseInt(quantity);
 
   if (!companyId || isNaN(quantityNum) || quantityNum <= 0) {
-    throw new functions.https.HttpsError(
+    throw new HttpsError(
       "invalid-argument",
       "Invalid trade data provided."
     );
@@ -64,47 +67,37 @@ exports.processTrade = functions.https.onCall(async (data, context) => {
       const tradeValue = stockData.currentPrice * quantityNum;
 
       if (action === "buy") {
-        // Check if player has enough cash
         if (playerData.cash < tradeValue) {
           throw new Error("Insufficient funds.");
         }
-        
-        // Update player's cash and shares
         const newCash = playerData.cash - tradeValue;
         const currentShares = playerData.shares[companyId] || 0;
         const newShares = currentShares + quantityNum;
-
         transaction.update(playerRef, {
           cash: newCash,
           [`shares.${companyId}`]: newShares,
         });
-
         return { message: "Purchase successful!" };
 
       } else if (action === "sell") {
         const currentShares = playerData.shares[companyId] || 0;
-        // Check if player has enough shares
         if (currentShares < quantityNum) {
           throw new Error("Insufficient shares to sell.");
         }
-
-        // Update player's cash and shares
         const newCash = playerData.cash + tradeValue;
         const newShares = currentShares - quantityNum;
-
         transaction.update(playerRef, {
           cash: newCash,
           [`shares.${companyId}`]: newShares,
         });
-
         return { message: "Sale successful!" };
+        
       } else {
         throw new Error("Invalid action specified.");
       }
     });
   } catch (error) {
     console.error("Trade failed:", error);
-    // Throw a user-friendly error message back to the client
-    throw new functions.https.HttpsError("internal", error.message);
+    throw new HttpsError("internal", error.message);
   }
 });
