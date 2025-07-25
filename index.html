@@ -5,11 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chrome & Circuits Exchange</title>
     <link rel="stylesheet" href="style.css">
-    <!-- The defer attribute is crucial here. It tells the browser to wait for the HTML to load before running the script. -->
     <script type="module" src="game.js" defer></script>
 </head>
 <body>
-    <div id="app-container">
+    <!-- Login Container - Shown by default -->
+    <div id="login-container">
+        <h1>Chrome & Circuits Exchange</h1>
+        <p>Your journey to becoming a market tycoon starts now.</p>
+        <button id="login-button" class="trade-button buy">Sign in with Google</button>
+    </div>
+
+    <!-- App Container - Hidden by default -->
+    <div id="app-container" style="display: none;">
         <!-- Left Panel: Market Overview -->
         <div id="market-panel" class="panel">
             <h2 class="panel-title">Market Watch</h2>
