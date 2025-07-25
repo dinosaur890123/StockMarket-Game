@@ -21,13 +21,13 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
 // --- !! IMPORTANT SECURITY CONFIGURATION !! ---
-// Your unique User ID is now set.
 const ADMIN_UID = "OxisixExmlY7X5rwbIGa8Zl5Ypn2";
 
 // --- DOM Element References ---
 const authContainer = document.getElementById('authContainer');
 const adminContent = document.getElementById('adminContent');
 const unauthorizedMessage = document.getElementById('unauthorizedMessage');
+const loginPrompt = document.getElementById('loginPrompt'); // New element reference
 const companyList = document.getElementById('companyList');
 const companyForm = document.getElementById('companyForm');
 const formTitle = document.getElementById('formTitle');
@@ -42,6 +42,9 @@ let isEditing = false;
 
 // --- Authentication Logic ---
 onAuthStateChanged(auth, user => {
+    // Hide the initial login prompt as soon as we know the auth state
+    loginPrompt.classList.add('hidden');
+
     if (user) {
         // User is signed in. Check if they are the admin.
         if (user.uid === ADMIN_UID) {
@@ -68,7 +71,7 @@ onAuthStateChanged(auth, user => {
             document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
         }
     } else {
-        // User is signed out. Hide everything and show the sign-in button.
+        // User is signed out. Hide content and show the sign-in button.
         adminContent.classList.add('hidden');
         unauthorizedMessage.classList.add('hidden');
         authContainer.innerHTML = `<button id="signInButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Sign In as Admin</button>`;
