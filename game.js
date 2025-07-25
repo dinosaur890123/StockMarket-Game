@@ -19,7 +19,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const analytics = getAnalytics(app); // Initialize Analytics
+const analytics = getAnalytics(app);
 const provider = new GoogleAuthProvider();
 
 // Unique App ID for Firestore paths to keep data organized
@@ -28,8 +28,10 @@ const appId = 'stock-market-game-v1';
 // --- DOM Element References ---
 const authContainer = document.getElementById('authContainer');
 const signInButton = document.getElementById('signInButton');
+const mainSignInButton = document.getElementById('mainSignInButton'); // New button
 const signOutButton = document.getElementById('signOutButton');
 const userInfo = document.getElementById('userInfo');
+const loginPromptMain = document.getElementById('loginPromptMain'); // New prompt
 const gameContent = document.getElementById('gameContent');
 const portfolioCash = document.getElementById('portfolioCash');
 const portfolioValue = document.getElementById('portfolioValue');
@@ -45,8 +47,8 @@ const closeMessageButton = document.getElementById('closeMessageButton');
 let currentUserId = null;
 let userPortfolio = null;
 let stockData = {};
-let stockUnsubscribe = null; // To stop listening for stock updates on sign-out
-let portfolioUnsubscribe = null; // To stop listening for portfolio updates on sign-out
+let stockUnsubscribe = null;
+let portfolioUnsubscribe = null;
 
 // --- Synthetic News Events ---
 const newsEvents = [
@@ -65,7 +67,6 @@ const showMessage = (text, isError = false) => {
     messageBox.classList.remove('hidden');
     messageBox.classList.toggle('bg-red-500', isError);
     messageBox.classList.toggle('bg-green-500', !isError);
-    // Hide the message after 5 seconds
     setTimeout(() => messageBox.classList.add('hidden'), 5000);
 };
 
@@ -73,6 +74,7 @@ closeMessageButton.addEventListener('click', () => messageBox.classList.add('hid
 
 const updateUIForAuthState = (user) => {
     if (user) {
+        // User is logged IN
         signInButton.classList.add('hidden');
         signOutButton.classList.remove('hidden');
         userInfo.innerHTML = `
@@ -80,49 +82,49 @@ const updateUIForAuthState = (user) => {
             <p class="text-xs text-gray-400">${user.email}</p>
         `;
         gameContent.classList.remove('hidden');
+        loginPromptMain.classList.add('hidden'); // Hide the welcome prompt
     } else {
+        // User is logged OUT
         signInButton.classList.remove('hidden');
         signOutButton.classList.add('hidden');
         userInfo.innerHTML = '';
         gameContent.classList.add('hidden');
+        loginPromptMain.classList.remove('hidden'); // Show the welcome prompt
         marketLoading.textContent = 'Please sign in to view the market.';
     }
 };
 
 // --- Authentication Logic ---
-signInButton.addEventListener('click', async () => {
+const handleSignIn = async () => {
     try {
         await signInWithPopup(auth, provider);
     } catch (error) {
         console.error("Sign in error", error);
         showMessage(`Sign in failed: ${error.message}`, true);
     }
-});
+};
 
-signOutButton.addEventListener('click', async () => {
-    await signOut(auth);
-});
+signInButton.addEventListener('click', handleSignIn);
+mainSignInButton.addEventListener('click', handleSignIn);
+signOutButton.addEventListener('click', () => signOut(auth));
 
 onAuthStateChanged(auth, user => {
-    // Clean up old data listeners to prevent memory leaks
     if (stockUnsubscribe) stockUnsubscribe();
     if (portfolioUnsubscribe) portfolioUnsubscribe();
 
+    updateUIForAuthState(user); // Centralized UI logic
+
     if (user) {
         currentUserId = user.uid;
-        updateUIForAuthState(user);
         loadGameData(currentUserId);
     } else {
         currentUserId = null;
-        updateUIForAuthState(null);
-        marketContainer.innerHTML = ''; // Clear the market view
+        marketContainer.innerHTML = ''; 
     }
 });
 
 // --- Firestore and Game Logic ---
 
-// This function runs once to populate Firestore with the initial companies.
-// It will not overwrite existing data.
 const initializeMarketInFirestore = async () => {
     console.log("Checking if market needs initialization in Firestore...");
     const initialCompanies = [
@@ -146,7 +148,7 @@ const initializeMarketInFirestore = async () => {
                 name: company.name,
                 sector: company.sector,
                 price: company.basePrice,
-                history: [company.basePrice] // Store price history for potential charting
+                history: [company.basePrice]
             });
         });
         await batch.commit();
@@ -156,15 +158,13 @@ const initializeMarketInFirestore = async () => {
     }
 };
 
-// Main function to load all game data for a logged-in user
 const loadGameData = async (userId) => {
     marketLoading.textContent = 'Loading market data...';
-    await initializeMarketInFirestore(); // Ensure companies exist before loading them
+    await initializeMarketInFirestore();
     subscribeToStockUpdates();
     loadOrCreatePortfolio(userId);
 };
 
-// Subscribes to real-time updates for all stocks from Firestore
 const subscribeToStockUpdates = () => {
     const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stocks`);
     stockUnsubscribe = onSnapshot(stocksCollectionRef, (snapshot) => {
@@ -182,7 +182,6 @@ const subscribeToStockUpdates = () => {
     });
 };
 
-// Loads a user's portfolio or creates a new one if it's their first time
 const loadOrCreatePortfolio = (userId) => {
     const portfolioRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio`, 'main');
     
@@ -192,10 +191,10 @@ const loadOrCreatePortfolio = (userId) => {
         } else {
             console.log("No portfolio found, creating a new one.");
             const newPortfolio = {
-                cash: 20000, // Starting cash is $20,000
-                stocks: {} // Starts with no stocks
+                cash: 20000,
+                stocks: {}
             };
-            setDoc(portfolioRef, newPortfolio); // This will trigger the onSnapshot again
+            setDoc(portfolioRef, newPortfolio);
             userPortfolio = newPortfolio;
         }
         renderPortfolio();
@@ -206,7 +205,6 @@ const loadOrCreatePortfolio = (userId) => {
     });
 };
 
-// --- Game Actions (Buy/Sell) ---
 const executeTransaction = async (ticker, quantity, type) => {
     if (!userPortfolio || !stockData[ticker]) {
         showMessage("Game data not loaded yet. Please wait.", true);
@@ -215,7 +213,7 @@ const executeTransaction = async (ticker, quantity, type) => {
 
     const price = stockData[ticker].price;
     const cost = price * quantity;
-    const newPortfolio = JSON.parse(JSON.stringify(userPortfolio)); // Create a safe copy
+    const newPortfolio = JSON.parse(JSON.stringify(userPortfolio));
 
     if (type === 'BUY') {
         if (newPortfolio.cash < cost) {
@@ -236,10 +234,9 @@ const executeTransaction = async (ticker, quantity, type) => {
         }
     }
     
-    // Simulate market impact: Large trades affect the stock price
-    const priceImpactFactor = 0.005; // 0.5% price change per 100 shares traded
+    const priceImpactFactor = 0.005;
     const priceChangePercentage = type === 'BUY' ? (1 + priceImpactFactor * (quantity / 100)) : (1 - priceImpactFactor * (quantity / 100));
-    const newPrice = Math.max(0.01, price * priceChangePercentage); // Price cannot fall below $0.01
+    const newPrice = Math.max(0.01, price * priceChangePercentage);
 
     try {
         const batch = writeBatch(db);
@@ -247,7 +244,7 @@ const executeTransaction = async (ticker, quantity, type) => {
         batch.set(portfolioRef, newPortfolio);
 
         const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, ticker);
-        const newHistory = [...stockData[ticker].history.slice(-29), newPrice]; // Keep last 30 prices
+        const newHistory = [...stockData[ticker].history.slice(-29), newPrice];
         batch.update(stockRef, { price: newPrice, history: newHistory });
 
         await batch.commit();
@@ -258,9 +255,8 @@ const executeTransaction = async (ticker, quantity, type) => {
     }
 };
 
-// --- Rendering Functions ---
 const renderMarket = (oldData = {}) => {
-    marketContainer.innerHTML = ''; // Clear previous state
+    marketContainer.innerHTML = '';
     const sortedTickers = Object.keys(stockData).sort();
 
     if (sortedTickers.length === 0) {
@@ -324,7 +320,6 @@ const updatePortfolioValue = () => {
     netWorth.textContent = `$${(userPortfolio.cash + currentStockValue).toFixed(2)}`;
 };
 
-// Event delegation for buy/sell buttons for better performance
 marketContainer.addEventListener('click', (e) => {
     if (e.target.tagName === 'BUTTON' && e.target.dataset.action) {
         const action = e.target.dataset.action;
@@ -342,9 +337,8 @@ marketContainer.addEventListener('click', (e) => {
     }
 });
 
-// --- News Simulation ---
 const triggerNewsEvent = async () => {
-    if (Object.keys(stockData).length === 0) return; // Don't run if no stocks are loaded
+    if (Object.keys(stockData).length === 0) return;
 
     const event = newsEvents[Math.floor(Math.random() * newsEvents.length)];
     newsTicker.textContent = `LATEST: ${event.text}`;
@@ -379,8 +373,6 @@ const triggerNewsEvent = async () => {
     }
 };
 
-// --- Initial Load ---
 window.onload = () => {
-    // Start the news cycle. It will only affect stocks once they are loaded.
-    setInterval(triggerNewsEvent, 30000); // New news every 30 seconds
+    setInterval(triggerNewsEvent, 30000);
 };

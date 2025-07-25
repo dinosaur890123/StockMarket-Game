@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Market Game</title>
+    <title>Stock Market Simulator</title>
     <!-- Link to Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Link to your custom stylesheet -->
@@ -15,12 +15,12 @@
 
     <!-- Header and Authentication Section -->
     <header class="bg-gray-800 shadow-md p-4 flex justify-between items-center sticky top-0 z-20">
-        <h1 class="text-2xl font-bold text-white">Stock Market Game</h1>
+        <h1 class="text-2xl font-bold text-white">Stock Market Simulator</h1>
         <div id="authContainer">
             <div class="flex items-center space-x-4">
                 <div id="userInfo" class="text-right"></div>
                 <button id="signInButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-200">
-                    Sign in with Google
+                    Sign in
                 </button>
                 <button id="signOutButton" class="hidden bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition duration-200">
                     Sign Out
@@ -34,43 +34,61 @@
         <p id="newsTicker" class="text-sm font-semibold text-yellow-300">Market is opening soon...</p>
     </div>
 
-    <!-- Main Game Content -->
-    <main id="gameContent" class="container mx-auto p-4 md:p-6 hidden">
-        
-        <!-- Pop-up Message Box -->
-        <div id="messageBox" class="hidden fixed top-5 right-5 max-w-sm rounded-lg shadow-lg p-4 text-white z-50 flex justify-between items-center">
-            <p id="messageText"></p>
-            <button id="closeMessageButton" class="ml-4 font-bold">X</button>
+    <!-- This container holds all page content -->
+    <div class="container mx-auto p-4 md:p-6">
+
+        <!-- Login Prompt for new users -->
+        <div id="loginPromptMain" class="text-center mt-10 px-4">
+            <svg class="mx-auto h-16 w-16 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+            </svg>
+            <h2 class="mt-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">Welcome to the Stock Market Simulator</h2>
+            <p class="mt-4 text-lg leading-8 text-gray-400">Where fortunes are made in milliseconds. Outsmart the market, react to live news, and build your trading empire from the ground up.</p>
+            <div class="mt-8">
+                <button id="mainSignInButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+                    Start Trading
+                </button>
+            </div>
         </div>
 
-        <!-- Portfolio Summary -->
-        <section id="portfolio" class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
-            <h2 class="text-2xl font-bold mb-4 text-white">Your Portfolio</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                <div>
-                    <p class="text-sm text-gray-400">Cash</p>
-                    <p id="portfolioCash" class="text-3xl font-semibold text-green-400">$0.00</p>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-400">Stocks Value</p>
-                    <p id="portfolioValue" class="text-3xl font-semibold text-blue-400">$0.00</p>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-400">Net Worth</p>
-                    <p id="netWorth" class="text-3xl font-bold text-white">$0.00</p>
-                </div>
+        <!-- Main Game Content (hidden until login) -->
+        <main id="gameContent" class="hidden">
+            
+            <!-- Pop-up Message Box -->
+            <div id="messageBox" class="hidden fixed top-5 right-5 max-w-sm rounded-lg shadow-lg p-4 text-white z-50 flex justify-between items-center">
+                <p id="messageText"></p>
+                <button id="closeMessageButton" class="ml-4 font-bold">X</button>
             </div>
-        </section>
 
-        <!-- Market Section -->
-        <section id="market">
-            <h2 class="text-2xl font-bold mb-4 text-white">Market</h2>
-            <div id="marketContainer" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                <!-- Stock cards will be dynamically inserted here by game.js -->
-                 <p id="marketLoading" class="text-center text-gray-400 col-span-full">Please sign in to view the market.</p>
-            </div>
-        </section>
-    </main>
+            <!-- Portfolio Summary -->
+            <section id="portfolio" class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+                <h2 class="text-2xl font-bold mb-4 text-white">Your Portfolio</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                    <div>
+                        <p class="text-sm text-gray-400">Cash</p>
+                        <p id="portfolioCash" class="text-3xl font-semibold text-green-400">$0.00</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Stocks Value</p>
+                        <p id="portfolioValue" class="text-3xl font-semibold text-blue-400">$0.00</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Net Worth</p>
+                        <p id="netWorth" class="text-3xl font-bold text-white">$0.00</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Market Section -->
+            <section id="market">
+                <h2 class="text-2xl font-bold mb-4 text-white">Market</h2>
+                <div id="marketContainer" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <!-- Stock cards will be dynamically inserted here by game.js -->
+                     <p id="marketLoading" class="text-center text-gray-400 col-span-full">Please sign in to view the market.</p>
+                </div>
+            </section>
+        </main>
+    </div>
 
     <!-- Your game logic script -->
     <script type="module" src="game.js"></script>
