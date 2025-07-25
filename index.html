@@ -3,62 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chrome & Circuits Exchange</title>
+    <title>Stock Market Game</title>
+    <!-- Link to Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link to your custom stylesheet -->
     <link rel="stylesheet" href="style.css">
-    <script type="module" src="game.js" defer></script>
+    <!-- Link to Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
-    <!-- Login Container - Shown by default -->
-    <div id="login-container">
-        <h1>Chrome & Circuits Exchange</h1>
-        <p>Your journey to becoming a market tycoon starts now.</p>
-        <button id="login-button" class="trade-button buy">Sign in with Google</button>
+<body class="bg-gray-900 text-gray-200">
+
+    <!-- Header and Authentication Section -->
+    <header class="bg-gray-800 shadow-md p-4 flex justify-between items-center sticky top-0 z-20">
+        <h1 class="text-2xl font-bold text-white">Stock Market Game</h1>
+        <div id="authContainer">
+            <div class="flex items-center space-x-4">
+                <div id="userInfo" class="text-right"></div>
+                <button id="signInButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-200">
+                    Sign in with Google
+                </button>
+                <button id="signOutButton" class="hidden bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition duration-200">
+                    Sign Out
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- News Ticker -->
+    <div class="bg-gray-700 p-2 overflow-hidden whitespace-nowrap">
+        <p id="newsTicker" class="text-sm font-semibold text-yellow-300">Market is opening soon...</p>
     </div>
 
-    <!-- App Container - Hidden by default -->
-    <div id="app-container" style="display: none;">
-        <!-- Left Panel: Market Overview -->
-        <div id="market-panel" class="panel">
-            <h2 class="panel-title">Market Watch</h2>
-            <div id="market-list">
-                <div class="stock-item-placeholder">Loading market data...</div>
-            </div>
+    <!-- Main Game Content -->
+    <main id="gameContent" class="container mx-auto p-4 md:p-6 hidden">
+        
+        <!-- Pop-up Message Box -->
+        <div id="messageBox" class="hidden fixed top-5 right-5 max-w-sm rounded-lg shadow-lg p-4 text-white z-50 flex justify-between items-center">
+            <p id="messageText"></p>
+            <button id="closeMessageButton" class="ml-4 font-bold">X</button>
         </div>
 
-        <!-- Center Panel: Main Terminal -->
-        <div id="main-panel" class="panel">
-            <h2 class="panel-title" id="selected-stock-title">Select a Stock</h2>
-            <div id="chart-container">
-                <div class="chart-placeholder">Price chart will be displayed here.</div>
-            </div>
-            <div id="trade-container">
-                <input type="number" id="quantity-input" placeholder="QTY" min="1">
-                <button id="buy-button" class="trade-button buy">BUY</button>
-                <button id="sell-button" class="trade-button sell">SELL</button>
-            </div>
-            <div id="news-feed" class="sub-panel">
-                <h3 class="sub-panel-title">News Feed</h3>
-                <ul id="news-list">
-                    <li>Connecting to news stream...</li>
-                </ul>
-            </div>
-        </div>
-
-        <!-- Right Panel: Player Portfolio -->
-        <div id="portfolio-panel" class="panel">
-            <h2 class="panel-title">Portfolio</h2>
-            <div id="player-stats" class="sub-panel">
-                 <p><strong>USER ID:</strong> <span id="user-id">Authenticating...</span></p>
-                 <p><strong>CASH:</strong> <span id="player-cash">$0.00</span></p>
-                 <p><strong>NET WORTH:</strong> <span id="player-net-worth">$0.00</span></p>
-            </div>
-            <div id="player-shares" class="sub-panel">
-                <h3 class="sub-panel-title">Your Assets</h3>
-                <div id="shares-list">
-                    <p>Loading assets...</p>
+        <!-- Portfolio Summary -->
+        <section id="portfolio" class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+            <h2 class="text-2xl font-bold mb-4 text-white">Your Portfolio</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                <div>
+                    <p class="text-sm text-gray-400">Cash</p>
+                    <p id="portfolioCash" class="text-3xl font-semibold text-green-400">$0.00</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-400">Stocks Value</p>
+                    <p id="portfolioValue" class="text-3xl font-semibold text-blue-400">$0.00</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-400">Net Worth</p>
+                    <p id="netWorth" class="text-3xl font-bold text-white">$0.00</p>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
+
+        <!-- Market Section -->
+        <section id="market">
+            <h2 class="text-2xl font-bold mb-4 text-white">Market</h2>
+            <div id="marketContainer" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                <!-- Stock cards will be dynamically inserted here by game.js -->
+                 <p id="marketLoading" class="text-center text-gray-400 col-span-full">Please sign in to view the market.</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Your game logic script -->
+    <script type="module" src="game.js"></script>
 </body>
 </html>
