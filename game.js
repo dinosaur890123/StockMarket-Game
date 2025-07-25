@@ -156,7 +156,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Helper to render portfolio only when both are available
         function tryRenderPortfolio() {
             if (latestMarket && latestPlayer) {
-                renderMarket(latestMarket);
+                // Update global marketData before rendering portfolio
+                marketData = {};
+                latestMarket.forEach(company => {
+                    marketData[company.id] = company;
+                });
                 renderPortfolio(latestPlayer);
             }
         }
@@ -164,6 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Market listener
         onSnapshot(collection(db, 'market'), (snapshot) => {
             latestMarket = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            renderMarket(latestMarket);
             tryRenderPortfolio();
         });
 
