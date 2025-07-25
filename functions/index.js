@@ -1,6 +1,5 @@
-// Import the necessary modules using the correct paths
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onUserCreated } = require("firebase-functions/v2/identity"); // Corrected import path
+// Import the top-level firebase-functions and admin modules
+const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 
 // Initialize the Firebase Admin SDK
@@ -9,14 +8,14 @@ const db = admin.firestore();
 
 /**
  * Creates a new player document in Firestore when a new user is created.
- * This uses the new v2 'onUserCreated' trigger.
+ * This is the v1 syntax for an authentication trigger.
  */
-exports.createPlayerOnSignUp = onUserCreated((user) => { // Corrected function name
-  const userRecord = user.data; // The user data is in the .data property
-  const userId = userRecord.uid;
+exports.createPlayerOnSignUp = functions.auth.user().onCreate((user) => {
+  // The user object is directly available.
+  const userId = user.uid;
   const playerRef = db.collection("players").doc(userId);
 
-  console.log(`v2: Creating new player document for user: ${userId}`);
+  console.log(`v1: Creating new player document for user: ${userId}`);
 
   // Set the starting data for the new player
   return playerRef.set({
@@ -27,23 +26,25 @@ exports.createPlayerOnSignUp = onUserCreated((user) => { // Corrected function n
 
 /**
  * A callable function to process a trade (buy or sell).
- * This uses the new v2 'onCall' trigger.
+ * This is the v1 syntax for a callable function.
  */
-exports.processTrade = onCall(async (request) => {
-  // Ensure the user is authenticated.
-  if (!request.auth) {
-    throw new HttpsError(
+exports.processTrade = functions.https.onCall(async (data, context) => {
+  // In v1, authentication data is in the 'context' object.
+  if (!context.auth) {
+    // Throwing an HttpsError so the client gets a specific error code.
+    throw new functions.https.HttpsError(
       "unauthenticated",
       "You must be logged in to make a trade."
     );
   }
 
-  const userId = request.auth.uid;
-  const { companyId, quantity, action } = request.data; // Data is in request.data
+  const userId = context.auth.uid;
+  // In v1, the data sent from the client is the first argument.
+  const { companyId, quantity, action } = data;
   const quantityNum = parseInt(quantity);
 
   if (!companyId || isNaN(quantityNum) || quantityNum <= 0) {
-    throw new HttpsError(
+    throw new functions.https.HttpsError(
       "invalid-argument",
       "Invalid trade data provided."
     );
@@ -98,6 +99,7 @@ exports.processTrade = onCall(async (request) => {
     });
   } catch (error) {
     console.error("Trade failed:", error);
-    throw new HttpsError("internal", error.message);
+    // Throw a new HttpsError to send a clean error to the client.
+    throw new functions.https.HttpsError("internal", error.message);
   }
 });
