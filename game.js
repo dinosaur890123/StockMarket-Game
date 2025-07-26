@@ -1,10 +1,9 @@
-// Firebase Imports (ensure you have an internet connection)
+// Firebase Imports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-analytics.js";
 
-// --- Your web app's Firebase configuration ---
+// --- Firebase Configuration ---
 const firebaseConfig = {
     apiKey: "AIzaSyDx1XsUhmqchGCHEiB0dcF8cV6JDCp39D0",
     authDomain: "stock-market-game-f0922.firebaseapp.com",
@@ -19,115 +18,161 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const analytics = getAnalytics(app);
 const provider = new GoogleAuthProvider();
-
-// Unique App ID for Firestore paths to keep data organized
 const appId = 'stock-market-game-v1';
 
 // --- DOM Element References ---
+const mainHeader = document.getElementById('mainHeader');
 const authContainer = document.getElementById('authContainer');
-const signInButton = document.getElementById('signInButton');
-const mainSignInButton = document.getElementById('mainSignInButton'); // New button
-const signOutButton = document.getElementById('signOutButton');
-const userInfo = document.getElementById('userInfo');
-const loginPromptMain = document.getElementById('loginPromptMain'); // New prompt
-const gameContent = document.getElementById('gameContent');
-const portfolioCash = document.getElementById('portfolioCash');
-const portfolioValue = document.getElementById('portfolioValue');
-const netWorth = document.getElementById('netWorth');
+const mainSignInButton = document.getElementById('mainSignInButton');
+const loginPage = document.getElementById('loginPage');
+const dashboardPage = document.getElementById('dashboardPage');
+const tradePage = document.getElementById('tradePage');
 const marketContainer = document.getElementById('marketContainer');
-const marketLoading = document.getElementById('marketLoading');
-const newsTicker = document.getElementById('newsTicker');
 const messageBox = document.getElementById('messageBox');
 const messageText = document.getElementById('messageText');
 const closeMessageButton = document.getElementById('closeMessageButton');
+// Header Portfolio
+const headerCash = document.getElementById('headerCash');
+const headerStocks = document.getElementById('headerStocks');
+const headerNetWorth = document.getElementById('headerNetWorth');
+// Trade Page Elements
+const tradeStockName = document.getElementById('tradeStockName');
+const tradeStockTicker = document.getElementById('tradeStockTicker');
+const tradeCurrentPrice = document.getElementById('tradeCurrentPrice');
+const tradeSharesOwned = document.getElementById('tradeSharesOwned');
+const backToDashboardBtn = document.getElementById('backToDashboardBtn');
+const buyBtn = document.getElementById('buyBtn');
+const sellBtn = document.getElementById('sellBtn');
+const buyQtyInput = document.getElementById('buyQty');
+const sellQtyInput = document.getElementById('sellQty');
+const stockChartCanvas = document.getElementById('stockChart');
 
-// --- Game State Variables ---
+// --- Game State & Chart ---
 let currentUserId = null;
 let userPortfolio = null;
 let stockData = {};
 let stockUnsubscribe = null;
 let portfolioUnsubscribe = null;
+let activeChart = null;
+let currentlyViewedStock = null;
 
-// --- Synthetic News Events ---
-const newsEvents = [
-    { text: "Innovate Corp (INNV) announces breakthrough in AI research, boosting investor confidence.", target: 'INNV', multiplier: 1.15, sectorTarget: null },
-    { text: "Healthwell Inc. (HLTH) faces regulatory scrutiny over new drug trials.", target: 'HLTH', multiplier: 0.88, sectorTarget: null },
-    { text: "Global oil surplus causes prices to drop, affecting the entire Energy sector.", target: null, multiplier: 0.92, sectorTarget: 'Energy' },
-    { text: "Positive economic report shows strong consumer spending.", target: null, multiplier: 1.08, sectorTarget: 'Consumer' },
-    { text: "Finix Capital (FINX) reports record quarterly profits.", target: 'FINX', multiplier: 1.12, sectorTarget: null },
-    { text: "Tech sector bubble? Analysts warn of overvaluation.", target: null, multiplier: 0.95, sectorTarget: 'Tech' },
-    { text: "A new clean energy bill passes, boosting Synergy Power (ENRG) prospects.", target: 'ENRG', multiplier: 1.20, sectorTarget: null },
-];
+// --- Navigation Logic ---
+const showPage = (pageToShow) => {
+    loginPage.classList.add('hidden');
+    dashboardPage.classList.add('hidden');
+    tradePage.classList.add('hidden');
+    pageToShow.classList.remove('hidden');
+};
 
-// --- UI Helper Functions ---
+const navigateToTradePage = (ticker) => {
+    currentlyViewedStock = ticker;
+    const stock = stockData[ticker];
+    if (!stock) return;
+
+    // Populate trade page
+    tradeStockName.textContent = stock.name;
+    tradeStockTicker.textContent = `${stock.ticker} - ${stock.sector}`;
+    updateTradePageDetails(stock);
+    showPage(tradePage);
+};
+
+backToDashboardBtn.addEventListener('click', () => {
+    showPage(dashboardPage);
+    currentlyViewedStock = null;
+    if(activeChart) {
+        activeChart.destroy();
+    }
+});
+
+// --- UI & Helper Functions ---
 const showMessage = (text, isError = false) => {
     messageText.textContent = text;
     messageBox.classList.remove('hidden');
-    messageBox.classList.toggle('bg-red-500', isError);
-    messageBox.classList.toggle('bg-green-500', !isError);
-    setTimeout(() => messageBox.classList.add('hidden'), 5000);
+    messageBox.classList.toggle('bg-red-800', isError);
+    messageBox.classList.toggle('bg-green-800', !isError);
+    setTimeout(() => messageBox.classList.add('hidden'), 4000);
 };
 
 closeMessageButton.addEventListener('click', () => messageBox.classList.add('hidden'));
 
-const updateUIForAuthState = (user) => {
-    if (user) {
-        // User is logged IN
-        signInButton.classList.add('hidden');
-        signOutButton.classList.remove('hidden');
-        userInfo.innerHTML = `
-            <p class="text-sm font-medium">${user.displayName}</p>
-            <p class="text-xs text-gray-400">${user.email}</p>
-        `;
-        gameContent.classList.remove('hidden');
-        loginPromptMain.classList.add('hidden'); // Hide the welcome prompt
-    } else {
-        // User is logged OUT
-        signInButton.classList.remove('hidden');
-        signOutButton.classList.add('hidden');
-        userInfo.innerHTML = '';
-        gameContent.classList.add('hidden');
-        loginPromptMain.classList.remove('hidden'); // Show the welcome prompt
-        marketLoading.textContent = 'Please sign in to view the market.';
-    }
-};
-
-// --- Authentication Logic ---
-const handleSignIn = async () => {
-    try {
-        await signInWithPopup(auth, provider);
-    } catch (error) {
-        console.error("Sign in error", error);
-        showMessage(`Sign in failed: ${error.message}`, true);
-    }
-};
-
-signInButton.addEventListener('click', handleSignIn);
-mainSignInButton.addEventListener('click', handleSignIn);
-signOutButton.addEventListener('click', () => signOut(auth));
-
+// --- Authentication ---
 onAuthStateChanged(auth, user => {
     if (stockUnsubscribe) stockUnsubscribe();
     if (portfolioUnsubscribe) portfolioUnsubscribe();
 
-    updateUIForAuthState(user); // Centralized UI logic
-
     if (user) {
         currentUserId = user.uid;
-        loadGameData(currentUserId);
+        mainHeader.classList.remove('hidden');
+        authContainer.innerHTML = `<button id="signOutButton" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Sign Out</button>`;
+        document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
+        showPage(dashboardPage);
+        loadGameData(user.uid);
     } else {
         currentUserId = null;
-        marketContainer.innerHTML = ''; 
+        mainHeader.classList.add('hidden');
+        authContainer.innerHTML = `<button id="signInButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Sign In</button>`;
+        document.getElementById('signInButton').addEventListener('click', handleSignIn);
+        showPage(loginPage);
     }
 });
 
-// --- Firestore and Game Logic ---
+const handleSignIn = async () => {
+    try {
+        await signInWithPopup(auth, provider);
+    } catch (error) {
+        console.error("Sign in error:", error);
+        showMessage("Sign in failed. Please try again.", true);
+    }
+};
+mainSignInButton.addEventListener('click', handleSignIn);
 
+
+// --- Charting ---
+const drawStockChart = (stock) => {
+    if (activeChart) {
+        activeChart.destroy();
+    }
+    const labels = stock.history.map((_, index) => index + 1);
+    const data = {
+        labels: labels,
+        datasets: [{
+            label: `${stock.ticker} Price History`,
+            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+            borderColor: 'rgba(59, 130, 246, 1)',
+            data: stock.history,
+            fill: true,
+            tension: 0.4,
+        }]
+    };
+    const config = {
+        type: 'line',
+        data: data,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    ticks: { color: '#9ca3af' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                x: {
+                    ticks: { color: '#9ca3af' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    };
+    activeChart = new Chart(stockChartCanvas, config);
+};
+
+
+// --- Core Game Logic ---
 const initializeMarketInFirestore = async () => {
-    console.log("Checking if market needs initialization in Firestore...");
-    // ADDED: Volatility rating for each company. Higher number means bigger price swings.
     const initialCompanies = [
         { ticker: 'INNV', name: 'Innovate Corp', sector: 'Tech', basePrice: 150.00, volatility: 1.5 },
         { ticker: 'HLTH', name: 'Healthwell Inc.', sector: 'Healthcare', basePrice: 220.00, volatility: 0.8 },
@@ -135,33 +180,20 @@ const initializeMarketInFirestore = async () => {
         { ticker: 'CONS', name: 'Staple Goods Co.', sector: 'Consumer', basePrice: 120.75, volatility: 0.7 },
         { ticker: 'FINX', name: 'Finix Capital', sector: 'Finance', basePrice: 310.25, volatility: 1.0 },
     ];
-
     const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stocks`);
     const q = query(stocksCollectionRef);
     const querySnapshot = await getDocs(q);
-
     if (querySnapshot.empty) {
-        console.log("Market is empty. Initializing stocks in Firestore...");
         const batch = writeBatch(db);
-        initialCompanies.forEach(company => {
-            const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, company.ticker);
-            batch.set(stockRef, {
-                name: company.name,
-                sector: company.sector,
-                price: company.basePrice,
-                history: [company.basePrice],
-                volatility: company.volatility // ADDED: Saving volatility to Firestore
-            });
+        initialCompanies.forEach(c => {
+            const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, c.ticker);
+            batch.set(stockRef, { ...c, history: c.history || [c.basePrice] });
         });
         await batch.commit();
-        console.log("Market initialized successfully in Firestore.");
-    } else {
-        console.log("Market already exists in Firestore.");
     }
 };
 
 const loadGameData = async (userId) => {
-    marketLoading.textContent = 'Loading market data...';
     await initializeMarketInFirestore();
     subscribeToStockUpdates();
     loadOrCreatePortfolio(userId);
@@ -170,221 +202,112 @@ const loadGameData = async (userId) => {
 const subscribeToStockUpdates = () => {
     const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stocks`);
     stockUnsubscribe = onSnapshot(stocksCollectionRef, (snapshot) => {
-        let newStockData = {};
         snapshot.docs.forEach(doc => {
-            newStockData[doc.id] = { id: doc.id, ...doc.data() };
+            stockData[doc.id] = { id: doc.id, ...doc.data() };
         });
-        const oldStockData = { ...stockData };
-        stockData = newStockData;
-        renderMarket(oldStockData);
+        renderMarket();
         updatePortfolioValue();
-    }, (error) => {
-        console.error("Error listening to stock updates:", error);
-        showMessage("Could not connect to the market.", true);
+        if (currentlyViewedStock && stockData[currentlyViewedStock]) {
+            updateTradePageDetails(stockData[currentlyViewedStock]);
+        }
     });
 };
 
 const loadOrCreatePortfolio = (userId) => {
     const portfolioRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio`, 'main');
-    
     portfolioUnsubscribe = onSnapshot(portfolioRef, (docSnap) => {
         if (docSnap.exists()) {
             userPortfolio = docSnap.data();
         } else {
-            console.log("No portfolio found, creating a new one.");
-            const newPortfolio = {
-                cash: 20000,
-                stocks: {}
-            };
+            const newPortfolio = { cash: 20000, stocks: {} };
             setDoc(portfolioRef, newPortfolio);
             userPortfolio = newPortfolio;
         }
-        renderPortfolio();
         updatePortfolioValue();
-    }, (error) => {
-        console.error("Error loading portfolio:", error);
-        showMessage("Could not load your portfolio.", true);
     });
 };
 
 const executeTransaction = async (ticker, quantity, type) => {
-    if (!userPortfolio || !stockData[ticker]) {
-        showMessage("Game data not loaded yet. Please wait.", true);
+    if (!userPortfolio || !stockData[ticker] || !quantity || quantity <= 0) {
+        showMessage("Invalid transaction details.", true);
         return;
     }
-
     const price = stockData[ticker].price;
     const cost = price * quantity;
     const newPortfolio = JSON.parse(JSON.stringify(userPortfolio));
-
     if (type === 'BUY') {
-        if (newPortfolio.cash < cost) {
-            showMessage("Not enough cash for this purchase.", true);
-            return;
-        }
+        if (newPortfolio.cash < cost) return showMessage("Not enough cash.", true);
         newPortfolio.cash -= cost;
         newPortfolio.stocks[ticker] = (newPortfolio.stocks[ticker] || 0) + quantity;
-    } else { // SELL
-        if (!newPortfolio.stocks[ticker] || newPortfolio.stocks[ticker] < quantity) {
-            showMessage("You don't own enough shares to sell.", true);
-            return;
-        }
+    } else {
+        if (!newPortfolio.stocks[ticker] || newPortfolio.stocks[ticker] < quantity) return showMessage("Not enough shares to sell.", true);
         newPortfolio.cash += cost;
         newPortfolio.stocks[ticker] -= quantity;
-        if (newPortfolio.stocks[ticker] === 0) {
-            delete newPortfolio.stocks[ticker];
-        }
+        if (newPortfolio.stocks[ticker] === 0) delete newPortfolio.stocks[ticker];
     }
-    
-    // UPDATED: Price impact now considers the stock's volatility
     const stock = stockData[ticker];
-    const volatility = stock.volatility || 1.0; // Default to 1 if volatility isn't set
+    const volatility = stock.volatility || 1.0;
     const priceImpactFactor = 0.005;
     const adjustedImpact = priceImpactFactor * volatility;
     const priceChangePercentage = type === 'BUY' ? (1 + adjustedImpact * (quantity / 100)) : (1 - adjustedImpact * (quantity / 100));
     const newPrice = Math.max(0.01, price * priceChangePercentage);
-
-    try {
-        const batch = writeBatch(db);
-        const portfolioRef = doc(db, `artifacts/${appId}/users/${currentUserId}/portfolio`, 'main');
-        batch.set(portfolioRef, newPortfolio);
-
-        const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, ticker);
-        const newHistory = [...stockData[ticker].history.slice(-29), newPrice];
-        batch.update(stockRef, { price: newPrice, history: newHistory });
-
-        await batch.commit();
-        showMessage(`${type} order for ${quantity} ${ticker} shares executed!`, false);
-    } catch (error) {
-        console.error("Transaction failed: ", error);
-        showMessage(`Transaction failed: ${error.message}`, true);
-    }
+    const batch = writeBatch(db);
+    const portfolioRef = doc(db, `artifacts/${appId}/users/${currentUserId}/portfolio`, 'main');
+    batch.set(portfolioRef, newPortfolio);
+    const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, ticker);
+    const newHistory = [...stock.history.slice(-49), newPrice]; // Keep last 50 data points
+    batch.update(stockRef, { price: newPrice, history: newHistory });
+    await batch.commit();
+    showMessage(`${type} order for ${quantity} ${ticker} shares executed!`, false);
+    buyQtyInput.value = '';
+    sellQtyInput.value = '';
 };
 
-const renderMarket = (oldData = {}) => {
+buyBtn.addEventListener('click', () => executeTransaction(currentlyViewedStock, parseInt(buyQtyInput.value), 'BUY'));
+sellBtn.addEventListener('click', () => executeTransaction(currentlyViewedStock, parseInt(sellQtyInput.value), 'SELL'));
+
+// --- Rendering ---
+const renderMarket = () => {
     marketContainer.innerHTML = '';
     const sortedTickers = Object.keys(stockData).sort();
-
-    if (sortedTickers.length === 0) {
-        marketLoading.textContent = 'No stocks available in the market.';
-        marketContainer.appendChild(marketLoading);
-        return;
-    }
-
-    for (const ticker of sortedTickers) {
+    sortedTickers.forEach(ticker => {
         const stock = stockData[ticker];
-        const oldPrice = oldData[ticker]?.price || stock.price;
-        const priceChange = stock.price - oldPrice;
-        const priceChangePercent = oldPrice > 0 ? (priceChange / oldPrice) * 100 : 0;
-        
-        const changeColor = priceChange >= 0 ? 'text-green-400' : 'text-red-400';
-        const changeSymbol = priceChange >= 0 ? '▲' : '▼';
-
-        const stockCard = document.createElement('div');
-        stockCard.className = 'bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col justify-between';
-        stockCard.innerHTML = `
-            <div>
-                <div class="flex justify-between items-baseline">
-                    <h3 class="text-xl font-bold text-white">${stock.name} (${ticker})</h3>
-                    <span class="text-xs text-gray-400 font-mono">${stock.sector}</span>
-                </div>
-                <div class="flex justify-between items-center mt-2">
-                    <p class="text-3xl font-light text-white">$${stock.price.toFixed(2)}</p>
-                    <div class="text-right ${changeColor}">
-                        <p class="font-semibold">${changeSymbol} ${Math.abs(priceChange).toFixed(2)}</p>
-                        <p class="text-sm">(${priceChangePercent.toFixed(2)}%)</p>
-                    </div>
-                </div>
+        const card = document.createElement('div');
+        card.className = 'bg-gray-800 p-4 rounded-lg shadow-lg cursor-pointer transition transform hover:-translate-y-1 hover:shadow-blue-500/20';
+        card.innerHTML = `
+            <div class="flex justify-between items-baseline">
+                <h3 class="text-lg font-bold text-white">${stock.name}</h3>
+                <span class="text-xs font-mono bg-gray-700 px-2 py-1 rounded">${ticker}</span>
             </div>
-            <div class="mt-4 flex items-center space-x-2">
-                <input type="number" min="1" placeholder="Qty" class="w-1/3 bg-gray-700 border border-gray-600 rounded-md p-2 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                <button data-ticker="${ticker}" data-action="BUY" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition duration-200">Buy</button>
-                <button data-ticker="${ticker}" data-action="SELL" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition duration-200">Sell</button>
-            </div>
+            <p class="text-sm text-gray-400 mb-2">${stock.sector}</p>
+            <p class="text-2xl font-light text-white">$${stock.price.toFixed(2)}</p>
         `;
-        marketContainer.appendChild(stockCard);
-    }
-};
-
-const renderPortfolio = () => {
-    if (!userPortfolio) return;
-    portfolioCash.textContent = `$${userPortfolio.cash.toFixed(2)}`;
-    updatePortfolioValue();
+        card.addEventListener('click', () => navigateToTradePage(ticker));
+        marketContainer.appendChild(card);
+    });
 };
 
 const updatePortfolioValue = () => {
     if (!userPortfolio || Object.keys(stockData).length === 0) return;
-
-    let currentStockValue = 0;
+    let stockValue = 0;
     for (const ticker in userPortfolio.stocks) {
         if (stockData[ticker]) {
-            currentStockValue += userPortfolio.stocks[ticker] * stockData[ticker].price;
+            stockValue += userPortfolio.stocks[ticker] * stockData[ticker].price;
         }
     }
-
-    portfolioValue.textContent = `$${currentStockValue.toFixed(2)}`;
-    netWorth.textContent = `$${(userPortfolio.cash + currentStockValue).toFixed(2)}`;
-};
-
-marketContainer.addEventListener('click', (e) => {
-    if (e.target.tagName === 'BUTTON' && e.target.dataset.action) {
-        const action = e.target.dataset.action;
-        const ticker = e.target.dataset.ticker;
-        const input = e.target.parentElement.querySelector('input[type="number"]');
-        const quantity = parseInt(input.value, 10);
-
-        if (!quantity || quantity <= 0) {
-            showMessage("Please enter a valid quantity.", true);
-            return;
-        }
-        
-        executeTransaction(ticker, quantity, action);
-        input.value = '';
-    }
-});
-
-const triggerNewsEvent = async () => {
-    if (Object.keys(stockData).length === 0) return;
-
-    const event = newsEvents[Math.floor(Math.random() * newsEvents.length)];
-    newsTicker.textContent = `LATEST: ${event.text}`;
-    
-    const batch = writeBatch(db);
-    const stocksToUpdate = [];
-
-    if (event.target && stockData[event.target]) {
-        stocksToUpdate.push(stockData[event.target]);
-    } else if (event.sectorTarget) {
-        for (const ticker in stockData) {
-            if (stockData[ticker].sector === event.sectorTarget) {
-                stocksToUpdate.push(stockData[ticker]);
-            }
-        }
-    }
-
-    if (stocksToUpdate.length > 0) {
-        stocksToUpdate.forEach(stock => {
-            const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, stock.id);
-            // UPDATED: News event impact is now scaled by the stock's volatility
-            const volatility = stock.volatility || 1.0;
-            const baseChange = event.multiplier - 1; // e.g., 1.15 -> 0.15
-            const adjustedChange = baseChange * volatility;
-            const finalMultiplier = 1 + adjustedChange;
-            const newPrice = Math.max(0.01, stock.price * finalMultiplier);
-
-            const newHistory = [...stock.history.slice(-29), newPrice];
-            batch.update(stockRef, { price: newPrice, history: newHistory });
-        });
-
-        try {
-            await batch.commit();
-            console.log(`News event applied to ${stocksToUpdate.length} stock(s).`);
-        } catch (error) {
-            console.error("Failed to apply news event:", error);
-        }
+    const netWorth = userPortfolio.cash + stockValue;
+    headerCash.textContent = `$${userPortfolio.cash.toFixed(2)}`;
+    headerStocks.textContent = `$${stockValue.toFixed(2)}`;
+    headerNetWorth.textContent = `$${netWorth.toFixed(2)}`;
+    if (currentlyViewedStock) {
+        updateTradePageDetails(stockData[currentlyViewedStock]);
     }
 };
 
-window.onload = () => {
-    setInterval(triggerNewsEvent, 30000);
+const updateTradePageDetails = (stock) => {
+    if (!stock || !userPortfolio) return;
+    tradeCurrentPrice.textContent = `$${stock.price.toFixed(2)}`;
+    const sharesOwned = userPortfolio.stocks[stock.id] || 0;
+    tradeSharesOwned.textContent = `${sharesOwned} Shares`;
+    drawStockChart(stock);
 };
