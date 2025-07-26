@@ -1,4 +1,4 @@
-// Firebase Imports
+// Firebase Imports (FIXED: Removed markdown link formatting)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
@@ -20,10 +20,10 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// --- Security configuration for admin access ---
+// --- !! IMPORTANT SECURITY CONFIGURATION !! ---
 const ADMIN_UID = "XbwQTnFRrTaZ73IVHKjNXz4IaVz1";
 
-// --- DOM Element References definition ---
+// --- DOM Element References ---
 const authContainer = document.getElementById('authContainer');
 const adminContent = document.getElementById('adminContent');
 const unauthorizedMessage = document.getElementById('unauthorizedMessage');
@@ -46,10 +46,8 @@ onAuthStateChanged(auth, user => {
 
     if (user) {
         console.log("Auth state changed: User is signed in.", user.uid);
-        // User is signed in. Check if they are the admin.
         if (user.uid === ADMIN_UID) {
             console.log("User is ADMIN. Granting access.");
-            // If user is the admin, show admin content.
             adminContent.classList.remove('hidden');
             unauthorizedMessage.classList.add('hidden');
             authContainer.innerHTML = `
@@ -61,7 +59,6 @@ onAuthStateChanged(auth, user => {
             document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
         } else {
             console.warn("User is NOT an admin. Denying access.");
-            // User is NOT the admin. Show access denied message.
             adminContent.classList.add('hidden');
             unauthorizedMessage.classList.remove('hidden');
             authContainer.innerHTML = `
@@ -74,7 +71,6 @@ onAuthStateChanged(auth, user => {
         }
     } else {
         console.log("Auth state changed: User is signed out.");
-        // User is signed out. Hide everything and show the sign-in button.
         adminContent.classList.add('hidden');
         unauthorizedMessage.classList.add('hidden');
         authContainer.innerHTML = `<button id="signInButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Sign In as Admin</button>`;

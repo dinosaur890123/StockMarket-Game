@@ -1,7 +1,8 @@
-// Firebase Imports
-import { initializeApp } from "[https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js](https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js)";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "[https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js](https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js)";
-import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs, addDoc, serverTimestamp, where, updateDoc } from "[https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js](https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js)";
+// Firebase Imports (FIXED: Removed markdown link formatting)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs, addDoc, serverTimestamp, where, updateDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-analytics.js";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -18,6 +19,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const analytics = getAnalytics(app);
 const provider = new GoogleAuthProvider();
 const appId = 'stock-market-game-v1';
 
@@ -137,7 +139,6 @@ const subscribeToStocks = () => {
         renderDashboardPage(); // Render dashboard as well
         updatePortfolioValue();
     }, (error) => {
-        // ADDED: Better error handling
         console.error("Firestore Permission Error:", error);
         tradePage.innerHTML = `<p class="text-red-400 text-center">Could not load market data. Please check Firestore security rules.</p>`;
         dashboardPage.innerHTML = `<p class="text-red-400 text-center">Could not load dashboard. Please check Firestore security rules.</p>`;
@@ -232,7 +233,6 @@ const renderTradePage = () => {
     tradePage.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>`;
     const container = tradePage.querySelector('div');
     if (!container) return;
-    // FIX: Added safety checks before sorting
     const sortedStocks = Object.values(stockData).filter(s => s && s.ticker);
     sortedStocks.sort((a, b) => a.ticker.localeCompare(b.ticker));
 
@@ -253,8 +253,6 @@ const renderTradePage = () => {
 };
 
 const renderDashboardPage = () => {
-    // For now, the dashboard can show a welcome message or a summary.
-    // This function can be expanded later.
     dashboardPage.innerHTML = `
         <div class="bg-gray-800 p-6 rounded-lg">
             <h3 class="text-xl font-bold text-white">Welcome to your Dashboard</h3>
