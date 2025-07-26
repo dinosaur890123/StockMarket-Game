@@ -113,8 +113,6 @@ onAuthStateChanged(auth, user => {
     } else {
         currentUserId = null;
         mainHeader.classList.add('hidden');
-        // FIX: The auth container in the header should be empty when logged out.
-        // The main sign-in button on the login page is the only one needed.
         authContainer.innerHTML = '';
         showPage(loginPage);
     }
@@ -128,8 +126,14 @@ const handleSignIn = async () => {
         showMessage("Sign in failed. Please try again.", true);
     }
 };
-// This listener for the main button on the welcome screen is now the primary sign-in trigger.
-mainSignInButton.addEventListener('click', handleSignIn);
+
+// FIX: Added a safety check to ensure the button exists before adding a listener.
+// This prevents the app from crashing if the HTML is out of sync.
+if (mainSignInButton) {
+    mainSignInButton.addEventListener('click', handleSignIn);
+} else {
+    console.error("Debug: Could not find the main sign-in button. Your index.html might be out of date.");
+}
 
 
 // --- Charting ---
