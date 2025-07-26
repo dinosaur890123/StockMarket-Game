@@ -21,7 +21,7 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
 // --- !! IMPORTANT SECURITY CONFIGURATION !! ---
-const ADMIN_UID = "OxisixExmlY7X5rwbIGa8Zl5Ypn2";
+const ADMIN_UID = "XbwQTnFRrTaZ73IVHKjNXz4IaVz1";
 
 // --- DOM Element References ---
 const authContainer = document.getElementById('authContainer');
