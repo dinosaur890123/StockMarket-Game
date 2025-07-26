@@ -27,7 +27,7 @@ const ADMIN_UID = "OxisixExmlY7X5rwbIGa8Zl5Ypn2";
 const authContainer = document.getElementById('authContainer');
 const adminContent = document.getElementById('adminContent');
 const unauthorizedMessage = document.getElementById('unauthorizedMessage');
-const loginPrompt = document.getElementById('loginPrompt'); // New element reference
+const loginPrompt = document.getElementById('loginPrompt');
 const companyList = document.getElementById('companyList');
 const companyForm = document.getElementById('companyForm');
 const formTitle = document.getElementById('formTitle');
@@ -42,12 +42,13 @@ let isEditing = false;
 
 // --- Authentication Logic ---
 onAuthStateChanged(auth, user => {
-    // Hide the initial login prompt as soon as we know the auth state
-    loginPrompt.classList.add('hidden');
+    if (loginPrompt) loginPrompt.classList.add('hidden');
 
     if (user) {
+        console.log("Auth state changed: User is signed in.", user.uid);
         // User is signed in. Check if they are the admin.
         if (user.uid === ADMIN_UID) {
+            console.log("User is ADMIN. Granting access.");
             // User IS the admin. Show the admin panel.
             adminContent.classList.remove('hidden');
             unauthorizedMessage.classList.add('hidden');
@@ -59,6 +60,7 @@ onAuthStateChanged(auth, user => {
             `;
             document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
         } else {
+            console.warn("User is NOT an admin. Denying access.");
             // User is NOT the admin. Show access denied message.
             adminContent.classList.add('hidden');
             unauthorizedMessage.classList.remove('hidden');
@@ -71,11 +73,15 @@ onAuthStateChanged(auth, user => {
             document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
         }
     } else {
-        // User is signed out. Hide content and show the sign-in button.
+        console.log("Auth state changed: User is signed out.");
+        // User is signed out. Hide everything and show the sign-in button.
         adminContent.classList.add('hidden');
         unauthorizedMessage.classList.add('hidden');
         authContainer.innerHTML = `<button id="signInButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Sign In as Admin</button>`;
-        document.getElementById('signInButton').addEventListener('click', () => signInWithPopup(auth, provider));
+        const signInButton = document.getElementById('signInButton');
+        if (signInButton) {
+            signInButton.addEventListener('click', () => signInWithPopup(auth, provider));
+        }
     }
 });
 
@@ -123,6 +129,9 @@ onSnapshot(stocksCollectionRef, (snapshot) => {
         companies[doc.id] = doc.data();
     });
     renderCompanyList(companies);
+}, (error) => {
+    console.error("Firestore read error:", error);
+    showAdminMessage("Could not load company data. Check Firestore rules.", true);
 });
 
 // --- Form Handling & Event Listeners ---
@@ -132,17 +141,23 @@ companyForm.addEventListener('submit', async (e) => {
     const name = companyForm.name.value;
     const sector = companyForm.sector.value;
     const price = parseFloat(companyForm.price.value);
+    const volatility = parseFloat(companyForm.volatility.value || 1.0);
 
     if (!ticker || !name || !sector || isNaN(price)) {
         showAdminMessage("Please fill out all fields correctly.", true);
         return;
     }
 
-    const companyData = { name, sector, price, history: [price] };
+    const companyData = { name, sector, price, volatility, history: [price] };
     const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, ticker);
-    await setDoc(stockRef, companyData);
-    showAdminMessage(`Company ${ticker} has been ${isEditing ? 'updated' : 'added'}!`, false);
-    clearForm();
+    try {
+        await setDoc(stockRef, companyData);
+        showAdminMessage(`Company ${ticker} has been ${isEditing ? 'updated' : 'added'}!`, false);
+        clearForm();
+    } catch (error) {
+        console.error("Firestore write error:", error);
+        showAdminMessage("Failed to save company. Check Firestore rules.", true);
+    }
 });
 
 companyList.addEventListener('click', async (e) => {
@@ -153,8 +168,13 @@ companyList.addEventListener('click', async (e) => {
     if (target.classList.contains('delete-btn')) {
         if (confirm(`Are you sure you want to delete ${ticker}?`)) {
             const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, ticker);
-            await deleteDoc(stockRef);
-            showAdminMessage(`Company ${ticker} deleted.`, false);
+            try {
+                await deleteDoc(stockRef);
+                showAdminMessage(`Company ${ticker} deleted.`, false);
+            } catch (error) {
+                console.error("Firestore delete error:", error);
+                showAdminMessage(`Failed to delete ${ticker}. Check Firestore rules.`, true);
+            }
         }
     }
 
@@ -169,6 +189,7 @@ companyList.addEventListener('click', async (e) => {
                 companyForm.name.value = data.name;
                 companyForm.sector.value = data.sector;
                 companyForm.price.value = data.price;
+                companyForm.volatility.value = data.volatility || 1.0;
                 submitButton.textContent = 'Update Company';
                 submitButton.classList.replace('bg-blue-600', 'bg-green-600');
                 submitButton.classList.replace('hover:bg-blue-700', 'hover:bg-green-700');
