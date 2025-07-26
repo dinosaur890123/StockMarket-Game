@@ -20,10 +20,10 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// --- !! IMPORTANT SECURITY CONFIGURATION !! ---
+// --- Security configuration for admin access ---
 const ADMIN_UID = "XbwQTnFRrTaZ73IVHKjNXz4IaVz1";
 
-// --- DOM Element References ---
+// --- DOM Element References definition ---
 const authContainer = document.getElementById('authContainer');
 const adminContent = document.getElementById('adminContent');
 const unauthorizedMessage = document.getElementById('unauthorizedMessage');
@@ -49,7 +49,7 @@ onAuthStateChanged(auth, user => {
         // User is signed in. Check if they are the admin.
         if (user.uid === ADMIN_UID) {
             console.log("User is ADMIN. Granting access.");
-            // User IS the admin. Show the admin panel.
+            // If user is the admin, show admin content.
             adminContent.classList.remove('hidden');
             unauthorizedMessage.classList.add('hidden');
             authContainer.innerHTML = `

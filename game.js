@@ -1,7 +1,7 @@
 // Firebase Imports
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs, addDoc, serverTimestamp, where, updateDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+import { initializeApp } from "[https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js](https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js)";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "[https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js](https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js)";
+import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs, addDoc, serverTimestamp, where, updateDoc } from "[https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js](https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js)";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -63,8 +63,13 @@ const showPage = (pageId) => {
     ordersPage.classList.add('hidden');
     stockDetailPage.classList.add('hidden');
 
-    // Show the selected page
-    document.getElementById(pageId).classList.remove('hidden');
+    const pageElement = document.getElementById(pageId);
+    if (pageElement) {
+        pageElement.classList.remove('hidden');
+    } else {
+        console.error(`Navigation Error: Page with ID "${pageId}" not found.`);
+        dashboardPage.classList.remove('hidden'); // Fallback to dashboard
+    }
 
     // Update nav link styles
     Object.values(navLinks).forEach(link => link.classList.remove('active'));
@@ -120,16 +125,22 @@ const loadGameData = (userId) => {
 const subscribeToStocks = () => {
     const stocksRef = collection(db, `artifacts/${appId}/public/data/stocks`);
     stockUnsubscribe = onSnapshot(stocksRef, snapshot => {
+        console.log("Successfully fetched stock data.");
         snapshot.docChanges().forEach(change => {
             const stock = { id: change.doc.id, ...change.doc.data() };
             stockData[stock.id] = stock;
             if (change.type === "modified") {
-                // When a stock price changes, check if any pending orders can be filled
                 checkPendingOrders(stock);
             }
         });
-        renderTradePage(); // Re-render market overview
+        renderTradePage();
+        renderDashboardPage(); // Render dashboard as well
         updatePortfolioValue();
+    }, (error) => {
+        // ADDED: Better error handling
+        console.error("Firestore Permission Error:", error);
+        tradePage.innerHTML = `<p class="text-red-400 text-center">Could not load market data. Please check Firestore security rules.</p>`;
+        dashboardPage.innerHTML = `<p class="text-red-400 text-center">Could not load dashboard. Please check Firestore security rules.</p>`;
     });
 };
 
@@ -183,17 +194,13 @@ const executeSpecialOrder = async (order) => {
     const cost = stock.price * order.quantity;
     const newPortfolio = JSON.parse(JSON.stringify(userPortfolio));
 
-    // Check if order is still valid
     if (order.type === 'limit-buy' && newPortfolio.cash < cost) {
-        updateDoc(orderRef, { status: 'failed', reason: 'Insufficient funds' });
-        return;
+        return updateDoc(orderRef, { status: 'failed', reason: 'Insufficient funds' });
     }
     if ((order.type === 'limit-sell' || order.type === 'stop-loss') && (newPortfolio.stocks[order.ticker] || 0) < order.quantity) {
-        updateDoc(orderRef, { status: 'failed', reason: 'Insufficient shares' });
-        return;
+        return updateDoc(orderRef, { status: 'failed', reason: 'Insufficient shares' });
     }
 
-    // Update portfolio
     if (order.type === 'limit-buy') {
         newPortfolio.cash -= cost;
         newPortfolio.stocks[order.ticker] = (newPortfolio.stocks[order.ticker] || 0) + order.quantity;
@@ -224,7 +231,12 @@ const updatePortfolioValue = () => {
 const renderTradePage = () => {
     tradePage.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>`;
     const container = tradePage.querySelector('div');
-    Object.values(stockData).sort((a,b) => a.ticker.localeCompare(b.ticker)).forEach(stock => {
+    if (!container) return;
+    // FIX: Added safety checks before sorting
+    const sortedStocks = Object.values(stockData).filter(s => s && s.ticker);
+    sortedStocks.sort((a, b) => a.ticker.localeCompare(b.ticker));
+
+    sortedStocks.forEach(stock => {
         const card = document.createElement('div');
         card.className = 'bg-gray-800 p-4 rounded-lg shadow-lg cursor-pointer transition transform hover:-translate-y-1 hover:shadow-blue-500/20';
         card.innerHTML = `
@@ -240,12 +252,25 @@ const renderTradePage = () => {
     });
 };
 
+const renderDashboardPage = () => {
+    // For now, the dashboard can show a welcome message or a summary.
+    // This function can be expanded later.
+    dashboardPage.innerHTML = `
+        <div class="bg-gray-800 p-6 rounded-lg">
+            <h3 class="text-xl font-bold text-white">Welcome to your Dashboard</h3>
+            <p class="text-gray-400 mt-2">Here you can see a summary of your portfolio and market news.</p>
+            <p class="text-gray-400 mt-4">Navigate to the 'Trade' page to view stocks and place orders.</p>
+        </div>
+    `;
+};
+
 const renderOrdersPage = () => {
     ordersPage.innerHTML = `
         <h3 class="text-xl font-bold mb-4">Pending Orders</h3>
         <div id="pendingOrdersList" class="space-y-3 mb-8"></div>
     `;
     const pendingList = ordersPage.querySelector('#pendingOrdersList');
+    if (!pendingList) return;
     if (pendingOrders.length === 0) {
         pendingList.innerHTML = `<p class="text-gray-400">You have no pending orders.</p>`;
     } else {
