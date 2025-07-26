@@ -223,22 +223,77 @@ const renderTradePage = () => {
 };
 
 const renderDashboardPage = () => {
-    if (!userPortfolio || !stockData) return dashboardPage.innerHTML = `<p class="text-gray-400">Loading dashboard data...</p>`;
+    if (!userPortfolio || !stockData) {
+        dashboardPage.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg"><p class="text-gray-400">Loading dashboard data...</p></div>`;
+        return;
+    }
+
     const holdings = Object.keys(userPortfolio.stocks);
     let holdingsHTML = '';
-    if (holdings.length === 0 || holdings.every(t => (userPortfolio.stocks[t] || 0) === 0)) {
-        holdingsHTML = `<p class="text-gray-400 mt-4">You do not own any stocks. Navigate to the 'Trade' page to get started.</p>`;
+    let totalHoldingsValue = 0;
+
+    const validHoldings = holdings.filter(ticker => userPortfolio.stocks[ticker] > 0 && stockData[ticker]);
+
+    if (validHoldings.length === 0) {
+        holdingsHTML = `
+            <div class="text-center py-8">
+                <p class="text-gray-400">You do not own any stocks yet.</p>
+                <button id="dashboardGoToTrade" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">View Market</button>
+            </div>
+        `;
     } else {
-        holdings.forEach(ticker => {
+        validHoldings.forEach(ticker => {
             const stock = stockData[ticker];
             const quantity = userPortfolio.stocks[ticker];
-            if (!stock || !quantity) return;
             const currentValue = stock.price * quantity;
-            holdingsHTML += `<div class="bg-gray-700 p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600" onclick="window.renderStockDetailPage('${ticker}')"><div><p class="font-bold text-white">${stock.name} (${ticker})</p><p class="text-sm text-gray-400">${quantity} shares</p></div><div class="text-right"><p class="font-semibold text-white">$${currentValue.toFixed(2)}</p></div></div>`;
+            totalHoldingsValue += currentValue;
+            holdingsHTML += `
+                <div class="bg-gray-700 p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600" data-ticker="${ticker}">
+                    <div>
+                        <p class="font-bold text-white">${stock.name} (${ticker})</p>
+                        <p class="text-sm text-gray-400">${quantity} shares</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-semibold text-white">$${currentValue.toFixed(2)}</p>
+                    </div>
+                </div>
+            `;
         });
     }
-    dashboardPage.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg"><h3 class="text-xl font-bold text-white">My Holdings</h3><div class="space-y-3 mt-4">${holdingsHTML}</div></div>`;
+
+    dashboardPage.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-gray-800 p-6 rounded-lg">
+                <h3 class="text-xl font-bold text-white mb-4">Portfolio Summary</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between"><span class="text-gray-400">Cash Balance</span><span class="font-semibold text-green-400">$${userPortfolio.cash.toFixed(2)}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-400">Stock Holdings Value</span><span class="font-semibold text-blue-400">$${totalHoldingsValue.toFixed(2)}</span></div>
+                    <div class="border-t border-gray-700 my-2"></div>
+                    <div class="flex justify-between"><span class="text-gray-400 font-bold">Net Worth</span><span class="font-bold text-white">$${(userPortfolio.cash + totalHoldingsValue).toFixed(2)}</span></div>
+                </div>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg">
+                <h3 class="text-xl font-bold text-white">My Holdings</h3>
+                <div id="holdingsList" class="space-y-3 mt-4">
+                    ${holdingsHTML}
+                </div>
+            </div>
+        </div>
+    `;
+
+    const holdingsList = document.getElementById('holdingsList');
+    if (holdingsList) {
+        holdingsList.addEventListener('click', (e) => {
+            const holdingItem = e.target.closest('[data-ticker]');
+            if (holdingItem) renderStockDetailPage(holdingItem.dataset.ticker);
+        });
+    }
+    const goToTradeBtn = document.getElementById('dashboardGoToTrade');
+    if (goToTradeBtn) {
+        goToTradeBtn.addEventListener('click', () => showPage('tradePage'));
+    }
 };
+
 
 const renderOrdersPage = () => {
     ordersPage.innerHTML = `<h3 class="text-xl font-bold mb-4">Pending Orders</h3><div id="pendingOrdersList" class="space-y-3 mb-8"></div>`;
@@ -280,7 +335,7 @@ const attachTradeButtonListeners = (ticker) => {
         if(qty) executeTransaction(ticker, qty, 'market-buy');
     });
     document.getElementById('marketSellBtn').addEventListener('click', () => {
-        const qty = parseInt(document.getElementById('marketSellBtn').value);
+        const qty = parseInt(document.getElementById('marketQty').value);
         if(qty) executeTransaction(ticker, qty, 'market-sell');
     });
     document.getElementById('limitBuyBtn').addEventListener('click', () => placeSpecialOrder(ticker, 'limit-buy'));
