@@ -2,6 +2,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-analytics.js";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -18,6 +19,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const analytics = getAnalytics(app);
 const provider = new GoogleAuthProvider();
 const appId = 'stock-market-game-v1';
 
@@ -111,8 +113,9 @@ onAuthStateChanged(auth, user => {
     } else {
         currentUserId = null;
         mainHeader.classList.add('hidden');
-        authContainer.innerHTML = `<button id="signInButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Sign In</button>`;
-        document.getElementById('signInButton').addEventListener('click', handleSignIn);
+        // FIX: The auth container in the header should be empty when logged out.
+        // The main sign-in button on the login page is the only one needed.
+        authContainer.innerHTML = '';
         showPage(loginPage);
     }
 });
@@ -125,6 +128,7 @@ const handleSignIn = async () => {
         showMessage("Sign in failed. Please try again.", true);
     }
 };
+// This listener for the main button on the welcome screen is now the primary sign-in trigger.
 mainSignInButton.addEventListener('click', handleSignIn);
 
 
