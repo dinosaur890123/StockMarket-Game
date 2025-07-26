@@ -1,8 +1,7 @@
 // Firebase Imports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-analytics.js";
+import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs, addDoc, serverTimestamp, where, updateDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -19,303 +18,381 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const analytics = getAnalytics(app);
 const provider = new GoogleAuthProvider();
 const appId = 'stock-market-game-v1';
 
 // --- DOM Element References ---
-const mainHeader = document.getElementById('mainHeader');
+const sidebar = document.getElementById('sidebar');
+const appContainer = document.getElementById('appContainer');
 const authContainer = document.getElementById('authContainer');
 const mainSignInButton = document.getElementById('mainSignInButton');
+const mainContent = document.getElementById('mainContent');
+const pageTitle = document.getElementById('pageTitle');
+// Pages
 const loginPage = document.getElementById('loginPage');
 const dashboardPage = document.getElementById('dashboardPage');
 const tradePage = document.getElementById('tradePage');
-const marketContainer = document.getElementById('marketContainer');
-const messageBox = document.getElementById('messageBox');
-const messageText = document.getElementById('messageText');
-const closeMessageButton = document.getElementById('closeMessageButton');
+const ordersPage = document.getElementById('ordersPage');
+const stockDetailPage = document.getElementById('stockDetailPage');
+// Nav Links
+const navLinks = {
+    dashboard: document.getElementById('navDashboard'),
+    trade: document.getElementById('navTrade'),
+    orders: document.getElementById('navOrders'),
+};
 // Header Portfolio
 const headerCash = document.getElementById('headerCash');
 const headerStocks = document.getElementById('headerStocks');
 const headerNetWorth = document.getElementById('headerNetWorth');
-// Trade Page Elements
-const tradeStockName = document.getElementById('tradeStockName');
-const tradeStockTicker = document.getElementById('tradeStockTicker');
-const tradeCurrentPrice = document.getElementById('tradeCurrentPrice');
-const tradeSharesOwned = document.getElementById('tradeSharesOwned');
-const backToDashboardBtn = document.getElementById('backToDashboardBtn');
-const buyBtn = document.getElementById('buyBtn');
-const sellBtn = document.getElementById('sellBtn');
-const buyQtyInput = document.getElementById('buyQty');
-const sellQtyInput = document.getElementById('sellQty');
-const stockChartCanvas = document.getElementById('stockChart');
 
 // --- Game State & Chart ---
 let currentUserId = null;
 let userPortfolio = null;
 let stockData = {};
+let pendingOrders = [];
 let stockUnsubscribe = null;
 let portfolioUnsubscribe = null;
+let ordersUnsubscribe = null;
 let activeChart = null;
-let currentlyViewedStock = null;
 
-// --- Navigation Logic ---
-const showPage = (pageToShow) => {
-    loginPage.classList.add('hidden');
+// --- Navigation ---
+const showPage = (pageId) => {
+    // Hide all pages
     dashboardPage.classList.add('hidden');
     tradePage.classList.add('hidden');
-    pageToShow.classList.remove('hidden');
+    ordersPage.classList.add('hidden');
+    stockDetailPage.classList.add('hidden');
+
+    // Show the selected page
+    document.getElementById(pageId).classList.remove('hidden');
+
+    // Update nav link styles
+    Object.values(navLinks).forEach(link => link.classList.remove('active'));
+    if (pageId.startsWith('dashboard')) navLinks.dashboard.classList.add('active');
+    if (pageId.startsWith('trade')) navLinks.trade.classList.add('active');
+    if (pageId.startsWith('orders')) navLinks.orders.classList.add('active');
+    if (pageId.startsWith('stockDetail')) navLinks.trade.classList.add('active');
+
+    // Update page title
+    if (pageId === 'dashboardPage') pageTitle.textContent = 'Dashboard';
+    if (pageId === 'tradePage') pageTitle.textContent = 'Trade';
+    if (pageId === 'ordersPage') pageTitle.textContent = 'My Orders';
 };
 
-const navigateToTradePage = (ticker) => {
-    currentlyViewedStock = ticker;
-    const stock = stockData[ticker];
-    if (!stock) return;
-
-    // Populate trade page
-    tradeStockName.textContent = stock.name;
-    tradeStockTicker.textContent = `${stock.ticker} - ${stock.sector}`;
-    updateTradePageDetails(stock);
-    showPage(tradePage);
-};
-
-backToDashboardBtn.addEventListener('click', () => {
-    showPage(dashboardPage);
-    currentlyViewedStock = null;
-    if(activeChart) {
-        activeChart.destroy();
-    }
-});
-
-// --- UI & Helper Functions ---
-const showMessage = (text, isError = false) => {
-    messageText.textContent = text;
-    messageBox.classList.remove('hidden');
-    messageBox.classList.toggle('bg-red-800', isError);
-    messageBox.classList.toggle('bg-green-800', !isError);
-    setTimeout(() => messageBox.classList.add('hidden'), 4000);
-};
-
-closeMessageButton.addEventListener('click', () => messageBox.classList.add('hidden'));
+navLinks.dashboard.addEventListener('click', () => showPage('dashboardPage'));
+navLinks.trade.addEventListener('click', () => showPage('tradePage'));
+navLinks.orders.addEventListener('click', () => showPage('ordersPage'));
 
 // --- Authentication ---
 onAuthStateChanged(auth, user => {
+    // Clean up old listeners
     if (stockUnsubscribe) stockUnsubscribe();
     if (portfolioUnsubscribe) portfolioUnsubscribe();
+    if (ordersUnsubscribe) ordersUnsubscribe();
 
     if (user) {
         currentUserId = user.uid;
-        mainHeader.classList.remove('hidden');
-        authContainer.innerHTML = `<button id="signOutButton" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Sign Out</button>`;
+        sidebar.classList.remove('hidden');
+        mainContent.classList.remove('hidden');
+        loginPage.classList.add('hidden');
+        appContainer.style.marginLeft = '16rem'; // Adjust content for sidebar
+        authContainer.innerHTML = `<button id="signOutButton" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md">Sign Out</button>`;
         document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
-        showPage(dashboardPage);
+        showPage('dashboardPage');
         loadGameData(user.uid);
     } else {
         currentUserId = null;
-        mainHeader.classList.add('hidden');
-        authContainer.innerHTML = '';
-        showPage(loginPage);
+        sidebar.classList.add('hidden');
+        mainContent.classList.add('hidden');
+        loginPage.classList.remove('hidden');
+        appContainer.style.marginLeft = '0';
     }
 });
-
-const handleSignIn = async () => {
-    try {
-        await signInWithPopup(auth, provider);
-    } catch (error) {
-        console.error("Sign in error:", error);
-        showMessage("Sign in failed. Please try again.", true);
-    }
-};
-
-// FIX: Added a safety check to ensure the button exists before adding a listener.
-// This prevents the app from crashing if the HTML is out of sync.
-if (mainSignInButton) {
-    mainSignInButton.addEventListener('click', handleSignIn);
-} else {
-    console.error("Debug: Could not find the main sign-in button. Your index.html might be out of date.");
-}
-
-
-// --- Charting ---
-const drawStockChart = (stock) => {
-    if (activeChart) {
-        activeChart.destroy();
-    }
-    const labels = stock.history.map((_, index) => index + 1);
-    const data = {
-        labels: labels,
-        datasets: [{
-            label: `${stock.ticker} Price History`,
-            backgroundColor: 'rgba(59, 130, 246, 0.2)',
-            borderColor: 'rgba(59, 130, 246, 1)',
-            data: stock.history,
-            fill: true,
-            tension: 0.4,
-        }]
-    };
-    const config = {
-        type: 'line',
-        data: data,
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: false,
-                    ticks: { color: '#9ca3af' },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
-                },
-                x: {
-                    ticks: { color: '#9ca3af' },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
-                }
-            },
-            plugins: {
-                legend: { display: false }
-            }
-        }
-    };
-    activeChart = new Chart(stockChartCanvas, config);
-};
-
+mainSignInButton.addEventListener('click', () => signInWithPopup(auth, provider));
 
 // --- Core Game Logic ---
-const initializeMarketInFirestore = async () => {
-    const initialCompanies = [
-        { ticker: 'INNV', name: 'Innovate Corp', sector: 'Tech', basePrice: 150.00, volatility: 1.5 },
-        { ticker: 'HLTH', name: 'Healthwell Inc.', sector: 'Healthcare', basePrice: 220.00, volatility: 0.8 },
-        { ticker: 'ENRG', name: 'Synergy Power', sector: 'Energy', basePrice: 85.50, volatility: 1.3 },
-        { ticker: 'CONS', name: 'Staple Goods Co.', sector: 'Consumer', basePrice: 120.75, volatility: 0.7 },
-        { ticker: 'FINX', name: 'Finix Capital', sector: 'Finance', basePrice: 310.25, volatility: 1.0 },
-    ];
-    const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stocks`);
-    const q = query(stocksCollectionRef);
-    const querySnapshot = await getDocs(q);
-    if (querySnapshot.empty) {
-        const batch = writeBatch(db);
-        initialCompanies.forEach(c => {
-            const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, c.ticker);
-            batch.set(stockRef, { ...c, history: c.history || [c.basePrice] });
-        });
-        await batch.commit();
-    }
+const loadGameData = (userId) => {
+    subscribeToStocks();
+    subscribeToPortfolio(userId);
+    subscribeToOrders(userId);
 };
 
-const loadGameData = async (userId) => {
-    await initializeMarketInFirestore();
-    subscribeToStockUpdates();
-    loadOrCreatePortfolio(userId);
-};
-
-const subscribeToStockUpdates = () => {
-    const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stocks`);
-    stockUnsubscribe = onSnapshot(stocksCollectionRef, (snapshot) => {
-        snapshot.docs.forEach(doc => {
-            stockData[doc.id] = { id: doc.id, ...doc.data() };
+const subscribeToStocks = () => {
+    const stocksRef = collection(db, `artifacts/${appId}/public/data/stocks`);
+    stockUnsubscribe = onSnapshot(stocksRef, snapshot => {
+        snapshot.docChanges().forEach(change => {
+            const stock = { id: change.doc.id, ...change.doc.data() };
+            stockData[stock.id] = stock;
+            if (change.type === "modified") {
+                // When a stock price changes, check if any pending orders can be filled
+                checkPendingOrders(stock);
+            }
         });
-        renderMarket();
+        renderTradePage(); // Re-render market overview
         updatePortfolioValue();
-        if (currentlyViewedStock && stockData[currentlyViewedStock]) {
-            updateTradePageDetails(stockData[currentlyViewedStock]);
-        }
     });
 };
 
-const loadOrCreatePortfolio = (userId) => {
+const subscribeToPortfolio = (userId) => {
     const portfolioRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio`, 'main');
-    portfolioUnsubscribe = onSnapshot(portfolioRef, (docSnap) => {
-        if (docSnap.exists()) {
-            userPortfolio = docSnap.data();
+    portfolioUnsubscribe = onSnapshot(portfolioRef, docSnap => {
+        if (!docSnap.exists()) {
+            setDoc(portfolioRef, { cash: 20000, stocks: {} });
         } else {
-            const newPortfolio = { cash: 20000, stocks: {} };
-            setDoc(portfolioRef, newPortfolio);
-            userPortfolio = newPortfolio;
+            userPortfolio = docSnap.data();
+            updatePortfolioValue();
         }
-        updatePortfolioValue();
     });
 };
 
-const executeTransaction = async (ticker, quantity, type) => {
-    if (!userPortfolio || !stockData[ticker] || !quantity || quantity <= 0) {
-        showMessage("Invalid transaction details.", true);
+const subscribeToOrders = (userId) => {
+    const ordersRef = collection(db, `artifacts/${appId}/users/${userId}/orders`);
+    const q = query(ordersRef, where("status", "==", "pending"));
+    ordersUnsubscribe = onSnapshot(q, snapshot => {
+        pendingOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderOrdersPage();
+    });
+};
+
+// --- Order Execution Engine ---
+const checkPendingOrders = (stock) => {
+    if (!userPortfolio) return;
+    const price = stock.price;
+
+    pendingOrders.forEach(order => {
+        if (order.ticker !== stock.id) return;
+
+        let shouldExecute = false;
+        if (order.type === 'limit-buy' && price <= order.limitPrice) shouldExecute = true;
+        if (order.type === 'limit-sell' && price >= order.limitPrice) shouldExecute = true;
+        if (order.type === 'stop-loss' && price <= order.limitPrice) shouldExecute = true;
+
+        if (shouldExecute) {
+            executeSpecialOrder(order);
+        }
+    });
+};
+
+const executeSpecialOrder = async (order) => {
+    const orderRef = doc(db, `artifacts/${appId}/users/${currentUserId}/orders`, order.id);
+    const portfolioRef = doc(db, `artifacts/${appId}/users/${currentUserId}/portfolio`, 'main');
+
+    const stock = stockData[order.ticker];
+    if (!stock) return;
+
+    const cost = stock.price * order.quantity;
+    const newPortfolio = JSON.parse(JSON.stringify(userPortfolio));
+
+    // Check if order is still valid
+    if (order.type === 'limit-buy' && newPortfolio.cash < cost) {
+        updateDoc(orderRef, { status: 'failed', reason: 'Insufficient funds' });
         return;
     }
-    const price = stockData[ticker].price;
-    const cost = price * quantity;
-    const newPortfolio = JSON.parse(JSON.stringify(userPortfolio));
-    if (type === 'BUY') {
-        if (newPortfolio.cash < cost) return showMessage("Not enough cash.", true);
-        newPortfolio.cash -= cost;
-        newPortfolio.stocks[ticker] = (newPortfolio.stocks[ticker] || 0) + quantity;
-    } else {
-        if (!newPortfolio.stocks[ticker] || newPortfolio.stocks[ticker] < quantity) return showMessage("Not enough shares to sell.", true);
-        newPortfolio.cash += cost;
-        newPortfolio.stocks[ticker] -= quantity;
-        if (newPortfolio.stocks[ticker] === 0) delete newPortfolio.stocks[ticker];
+    if ((order.type === 'limit-sell' || order.type === 'stop-loss') && (newPortfolio.stocks[order.ticker] || 0) < order.quantity) {
+        updateDoc(orderRef, { status: 'failed', reason: 'Insufficient shares' });
+        return;
     }
-    const stock = stockData[ticker];
-    const volatility = stock.volatility || 1.0;
-    const priceImpactFactor = 0.005;
-    const adjustedImpact = priceImpactFactor * volatility;
-    const priceChangePercentage = type === 'BUY' ? (1 + adjustedImpact * (quantity / 100)) : (1 - adjustedImpact * (quantity / 100));
-    const newPrice = Math.max(0.01, price * priceChangePercentage);
+
+    // Update portfolio
+    if (order.type === 'limit-buy') {
+        newPortfolio.cash -= cost;
+        newPortfolio.stocks[order.ticker] = (newPortfolio.stocks[order.ticker] || 0) + order.quantity;
+    } else {
+        newPortfolio.cash += cost;
+        newPortfolio.stocks[order.ticker] -= order.quantity;
+    }
+
     const batch = writeBatch(db);
-    const portfolioRef = doc(db, `artifacts/${appId}/users/${currentUserId}/portfolio`, 'main');
     batch.set(portfolioRef, newPortfolio);
-    const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, ticker);
-    const newHistory = [...stock.history.slice(-49), newPrice]; // Keep last 50 data points
-    batch.update(stockRef, { price: newPrice, history: newHistory });
+    batch.update(orderRef, { status: 'filled', filledPrice: stock.price });
     await batch.commit();
-    showMessage(`${type} order for ${quantity} ${ticker} shares executed!`, false);
-    buyQtyInput.value = '';
-    sellQtyInput.value = '';
 };
 
-buyBtn.addEventListener('click', () => executeTransaction(currentlyViewedStock, parseInt(buyQtyInput.value), 'BUY'));
-sellBtn.addEventListener('click', () => executeTransaction(currentlyViewedStock, parseInt(sellQtyInput.value), 'SELL'));
-
 // --- Rendering ---
-const renderMarket = () => {
-    marketContainer.innerHTML = '';
-    const sortedTickers = Object.keys(stockData).sort();
-    sortedTickers.forEach(ticker => {
-        const stock = stockData[ticker];
+const updatePortfolioValue = () => {
+    if (!userPortfolio) return;
+    let stockValue = Object.keys(userPortfolio.stocks).reduce((acc, ticker) => {
+        const quantity = userPortfolio.stocks[ticker];
+        const price = stockData[ticker]?.price || 0;
+        return acc + (quantity * price);
+    }, 0);
+    headerCash.textContent = `$${userPortfolio.cash.toFixed(2)}`;
+    headerStocks.textContent = `$${stockValue.toFixed(2)}`;
+    headerNetWorth.textContent = `$${(userPortfolio.cash + stockValue).toFixed(2)}`;
+};
+
+const renderTradePage = () => {
+    tradePage.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>`;
+    const container = tradePage.querySelector('div');
+    Object.values(stockData).sort((a,b) => a.ticker.localeCompare(b.ticker)).forEach(stock => {
         const card = document.createElement('div');
         card.className = 'bg-gray-800 p-4 rounded-lg shadow-lg cursor-pointer transition transform hover:-translate-y-1 hover:shadow-blue-500/20';
         card.innerHTML = `
             <div class="flex justify-between items-baseline">
                 <h3 class="text-lg font-bold text-white">${stock.name}</h3>
-                <span class="text-xs font-mono bg-gray-700 px-2 py-1 rounded">${ticker}</span>
+                <span class="text-xs font-mono bg-gray-700 px-2 py-1 rounded">${stock.ticker}</span>
             </div>
             <p class="text-sm text-gray-400 mb-2">${stock.sector}</p>
             <p class="text-2xl font-light text-white">$${stock.price.toFixed(2)}</p>
         `;
-        card.addEventListener('click', () => navigateToTradePage(ticker));
-        marketContainer.appendChild(card);
+        card.addEventListener('click', () => renderStockDetailPage(stock.id));
+        container.appendChild(card);
     });
 };
 
-const updatePortfolioValue = () => {
-    if (!userPortfolio || Object.keys(stockData).length === 0) return;
-    let stockValue = 0;
-    for (const ticker in userPortfolio.stocks) {
-        if (stockData[ticker]) {
-            stockValue += userPortfolio.stocks[ticker] * stockData[ticker].price;
-        }
-    }
-    const netWorth = userPortfolio.cash + stockValue;
-    headerCash.textContent = `$${userPortfolio.cash.toFixed(2)}`;
-    headerStocks.textContent = `$${stockValue.toFixed(2)}`;
-    headerNetWorth.textContent = `$${netWorth.toFixed(2)}`;
-    if (currentlyViewedStock) {
-        updateTradePageDetails(stockData[currentlyViewedStock]);
+const renderOrdersPage = () => {
+    ordersPage.innerHTML = `
+        <h3 class="text-xl font-bold mb-4">Pending Orders</h3>
+        <div id="pendingOrdersList" class="space-y-3 mb-8"></div>
+    `;
+    const pendingList = ordersPage.querySelector('#pendingOrdersList');
+    if (pendingOrders.length === 0) {
+        pendingList.innerHTML = `<p class="text-gray-400">You have no pending orders.</p>`;
+    } else {
+        pendingOrders.forEach(order => {
+            const div = document.createElement('div');
+            div.className = 'bg-gray-800 p-4 rounded-lg flex justify-between items-center';
+            div.innerHTML = `
+                <div>
+                    <p class="font-bold text-white">${order.type.replace('-', ' ').toUpperCase()} ${order.ticker}</p>
+                    <p class="text-sm text-gray-400">${order.quantity} shares @ $${order.limitPrice.toFixed(2)}</p>
+                </div>
+                <button data-id="${order.id}" class="cancel-order-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded">Cancel</button>
+            `;
+            pendingList.appendChild(div);
+        });
     }
 };
 
-const updateTradePageDetails = (stock) => {
-    if (!stock || !userPortfolio) return;
-    tradeCurrentPrice.textContent = `$${stock.price.toFixed(2)}`;
-    const sharesOwned = userPortfolio.stocks[stock.id] || 0;
-    tradeSharesOwned.textContent = `${sharesOwned} Shares`;
+ordersPage.addEventListener('click', async e => {
+    if (e.target.classList.contains('cancel-order-btn')) {
+        const orderId = e.target.dataset.id;
+        const orderRef = doc(db, `artifacts/${appId}/users/${currentUserId}/orders`, orderId);
+        await updateDoc(orderRef, { status: 'cancelled' });
+    }
+});
+
+const renderStockDetailPage = (ticker) => {
+    const stock = stockData[ticker];
+    if (!stock) return;
+    pageTitle.textContent = `${stock.name} (${stock.ticker})`;
+    stockDetailPage.innerHTML = `
+      <div class="bg-gray-800 p-6 rounded-lg shadow-xl">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 bg-gray-900 p-4 rounded-lg h-96"><canvas id="stockChart"></canvas></div>
+          <div class="bg-gray-900 p-6 rounded-lg">
+            <h3 class="text-xl font-bold mb-4 text-white">Place an Order</h3>
+            <div class="space-y-4">
+              <!-- Market Order -->
+              <div>
+                <h4 class="font-semibold mb-2">Market Order</h4>
+                <input type="number" id="marketQty" placeholder="Quantity" class="w-full bg-gray-700 p-2 rounded">
+                <div class="flex space-x-2 mt-2">
+                  <button id="marketBuyBtn" class="flex-1 bg-green-600 p-2 rounded">Buy</button>
+                  <button id="marketSellBtn" class="flex-1 bg-red-600 p-2 rounded">Sell</button>
+                </div>
+              </div>
+              <!-- Limit Order -->
+              <div>
+                <h4 class="font-semibold mb-2">Limit Order</h4>
+                <input type="number" id="limitQty" placeholder="Quantity" class="w-full bg-gray-700 p-2 rounded mb-2">
+                <input type="number" id="limitPrice" placeholder="Price" class="w-full bg-gray-700 p-2 rounded">
+                <div class="flex space-x-2 mt-2">
+                  <button id="limitBuyBtn" class="flex-1 bg-green-600 p-2 rounded">Limit Buy</button>
+                  <button id="limitSellBtn" class="flex-1 bg-red-600 p-2 rounded">Limit Sell</button>
+                </div>
+              </div>
+              <!-- Stop Loss Order -->
+              <div>
+                <h4 class="font-semibold mb-2">Stop Loss</h4>
+                <input type="number" id="stopQty" placeholder="Quantity" class="w-full bg-gray-700 p-2 rounded mb-2">
+                <input type="number" id="stopPrice" placeholder="Trigger Price" class="w-full bg-gray-700 p-2 rounded">
+                <button id="stopSellBtn" class="w-full mt-2 bg-orange-600 p-2 rounded">Set Stop Loss</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
     drawStockChart(stock);
+    attachTradeButtonListeners(ticker);
+    showPage('stockDetailPage');
+};
+
+const attachTradeButtonListeners = (ticker) => {
+    // Market Orders
+    document.getElementById('marketBuyBtn').addEventListener('click', () => {
+        const qty = parseInt(document.getElementById('marketQty').value);
+        if(qty) executeTransaction(ticker, qty, 'market-buy');
+    });
+    document.getElementById('marketSellBtn').addEventListener('click', () => {
+        const qty = parseInt(document.getElementById('marketQty').value);
+        if(qty) executeTransaction(ticker, qty, 'market-sell');
+    });
+    // Special Orders
+    document.getElementById('limitBuyBtn').addEventListener('click', () => placeSpecialOrder(ticker, 'limit-buy'));
+    document.getElementById('limitSellBtn').addEventListener('click', () => placeSpecialOrder(ticker, 'limit-sell'));
+    document.getElementById('stopSellBtn').addEventListener('click', () => placeSpecialOrder(ticker, 'stop-loss'));
+};
+
+const executeTransaction = async (ticker, quantity, type) => {
+    // This function is now only for immediate market orders
+    const price = stockData[ticker].price;
+    const cost = price * quantity;
+    const newPortfolio = JSON.parse(JSON.stringify(userPortfolio));
+
+    if (type === 'market-buy') {
+        if (newPortfolio.cash < cost) return;
+        newPortfolio.cash -= cost;
+        newPortfolio.stocks[ticker] = (newPortfolio.stocks[ticker] || 0) + quantity;
+    } else {
+        if ((newPortfolio.stocks[ticker] || 0) < quantity) return;
+        newPortfolio.cash += cost;
+        newPortfolio.stocks[ticker] -= quantity;
+    }
+    await setDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/portfolio`, 'main'), newPortfolio);
+};
+
+const placeSpecialOrder = async (ticker, type) => {
+    let qty, price;
+    if (type === 'limit-buy' || type === 'limit-sell') {
+        qty = parseInt(document.getElementById('limitQty').value);
+        price = parseFloat(document.getElementById('limitPrice').value);
+    } else { // stop-loss
+        qty = parseInt(document.getElementById('stopQty').value);
+        price = parseFloat(document.getElementById('stopPrice').value);
+    }
+    if (!qty || !price || qty <= 0 || price <= 0) return;
+
+    const order = {
+        userId: currentUserId,
+        ticker,
+        type,
+        quantity: qty,
+        limitPrice: price,
+        status: 'pending',
+        createdAt: serverTimestamp()
+    };
+    await addDoc(collection(db, `artifacts/${appId}/users/${currentUserId}/orders`), order);
+    showPage('ordersPage');
+};
+
+const drawStockChart = (stock) => {
+    const canvas = document.getElementById('stockChart');
+    if (!canvas) return;
+    if (activeChart) activeChart.destroy();
+    activeChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: stock.history.map((_, i) => i),
+            datasets: [{
+                data: stock.history,
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                fill: true,
+                tension: 0.2
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
 };

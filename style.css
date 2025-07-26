@@ -1,43 +1,36 @@
 body {
     font-family: 'Inter', sans-serif;
-    /* Add a subtle background pattern */
     background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0);
     background-size: 20px 20px;
 }
 
-/* Glass morphism effect for the header */
-.glass-header {
-    background-color: rgba(23, 37, 84, 0.5); /* Semi-transparent dark blue */
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px); /* For Safari */
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+/* Glass morphism effect for the sidebar */
+.glass-sidebar {
+    background-color: rgba(17, 24, 39, 0.6); /* gray-900 with 60% opacity */
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px); /* For Safari */
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: #9ca3af; /* gray-400 */
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: #d1d5db; /* gray-300 */
 }
 
 /* Style for the active navigation link */
 .nav-link.active {
+    background-color: #3b82f6; /* blue-500 */
     color: #ffffff;
     font-weight: 600;
-}
-
-.nav-link {
-    color: #9ca3af; /* gray-400 */
-    transition: color 0.2s;
-}
-
-.nav-link:hover {
-    color: #d1d5db; /* gray-300 */
-}
-
-/* Animation for the news ticker */
-@keyframes ticker-scroll {
-    0% {
-        transform: translateX(100%);
-    }
-    100% {
-        transform: translateX(-100%);
-    }
-}
-
-#newsTicker {
-    animation: ticker-scroll 25s linear infinite;
+    box-shadow: 0 4px 14px 0 rgba(59, 130, 246, 0.25);
 }
