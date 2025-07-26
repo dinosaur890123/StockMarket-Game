@@ -1,4 +1,4 @@
-// Firebase Imports (FIXED: Removed markdown link formatting)
+// Firebase Imports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs, addDoc, serverTimestamp, where, updateDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
@@ -127,7 +127,6 @@ const loadGameData = (userId) => {
 const subscribeToStocks = () => {
     const stocksRef = collection(db, `artifacts/${appId}/public/data/stocks`);
     stockUnsubscribe = onSnapshot(stocksRef, snapshot => {
-        console.log("Successfully fetched stock data.");
         snapshot.docChanges().forEach(change => {
             const stock = { id: change.doc.id, ...change.doc.data() };
             stockData[stock.id] = stock;
@@ -136,7 +135,7 @@ const subscribeToStocks = () => {
             }
         });
         renderTradePage();
-        renderDashboardPage(); // Render dashboard as well
+        renderDashboardPage(); // Re-render dashboard whenever stock data changes
         updatePortfolioValue();
     }, (error) => {
         console.error("Firestore Permission Error:", error);
@@ -152,6 +151,7 @@ const subscribeToPortfolio = (userId) => {
             setDoc(portfolioRef, { cash: 20000, stocks: {} });
         } else {
             userPortfolio = docSnap.data();
+            renderDashboardPage(); // Re-render dashboard when portfolio changes
             updatePortfolioValue();
         }
     });
@@ -253,11 +253,44 @@ const renderTradePage = () => {
 };
 
 const renderDashboardPage = () => {
+    // FIX: This function is now dynamic and shows the user's holdings.
+    if (!userPortfolio || !stockData) {
+        dashboardPage.innerHTML = `<p class="text-gray-400">Loading dashboard data...</p>`;
+        return;
+    }
+
+    const holdings = Object.keys(userPortfolio.stocks);
+
+    let holdingsHTML = '';
+    if (holdings.length === 0) {
+        holdingsHTML = `<p class="text-gray-400 mt-4">You do not own any stocks. Navigate to the 'Trade' page to get started.</p>`;
+    } else {
+        holdings.forEach(ticker => {
+            const stock = stockData[ticker];
+            const quantity = userPortfolio.stocks[ticker];
+            if (!stock || quantity === 0) return;
+
+            const currentValue = stock.price * quantity;
+            holdingsHTML += `
+                <div class="bg-gray-700 p-4 rounded-lg flex justify-between items-center">
+                    <div>
+                        <p class="font-bold text-white">${stock.name} (${ticker})</p>
+                        <p class="text-sm text-gray-400">${quantity} shares</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-semibold text-white">$${currentValue.toFixed(2)}</p>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
     dashboardPage.innerHTML = `
         <div class="bg-gray-800 p-6 rounded-lg">
-            <h3 class="text-xl font-bold text-white">Welcome to your Dashboard</h3>
-            <p class="text-gray-400 mt-2">Here you can see a summary of your portfolio and market news.</p>
-            <p class="text-gray-400 mt-4">Navigate to the 'Trade' page to view stocks and place orders.</p>
+            <h3 class="text-xl font-bold text-white">My Holdings</h3>
+            <div class="space-y-3 mt-4">
+                ${holdingsHTML}
+            </div>
         </div>
     `;
 };
