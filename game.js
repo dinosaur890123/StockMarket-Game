@@ -87,7 +87,7 @@ onAuthStateChanged(auth, user => {
         appContainer.style.marginLeft = '16rem';
         authContainer.innerHTML = `<button id="signOutButton" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md">Sign Out</button>`;
         document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
-        showPage('tradePage');
+        showPage('dashboardPage'); // Default to dashboard on login
         loadGameData(user.uid);
     } else {
         currentUserId = null;
@@ -149,7 +149,6 @@ const subscribeToPortfolio = (userId) => {
             setDoc(portfolioRef, { cash: 20000, stocks: {} });
         } else {
             userPortfolio = docSnap.data();
-            renderDashboardPage();
             updatePortfolioValue();
         }
     });
@@ -223,77 +222,23 @@ const renderTradePage = () => {
 };
 
 const renderDashboardPage = () => {
-    if (!userPortfolio || !stockData) {
-        dashboardPage.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg"><p class="text-gray-400">Loading dashboard data...</p></div>`;
+    // UPDATED: Dashboard now shows the market overview, same as the trade page.
+    dashboardPage.innerHTML = `<h3 class="text-xl font-bold text-white mb-4">Market Overview</h3><div id="dashboardMarketContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>`;
+    const container = dashboardPage.querySelector('#dashboardMarketContainer');
+    if (!container) return;
+    const sortedStocks = Object.values(stockData).filter(s => s && s.ticker).sort((a, b) => a.ticker.localeCompare(b.ticker));
+    if (sortedStocks.length === 0) {
+        container.innerHTML = `<p class="text-gray-400">Market data is loading...</p>`;
         return;
     }
-
-    const holdings = Object.keys(userPortfolio.stocks);
-    let holdingsHTML = '';
-    let totalHoldingsValue = 0;
-
-    const validHoldings = holdings.filter(ticker => userPortfolio.stocks[ticker] > 0 && stockData[ticker]);
-
-    if (validHoldings.length === 0) {
-        holdingsHTML = `
-            <div class="text-center py-8">
-                <p class="text-gray-400">You do not own any stocks yet.</p>
-                <button id="dashboardGoToTrade" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">View Market</button>
-            </div>
-        `;
-    } else {
-        validHoldings.forEach(ticker => {
-            const stock = stockData[ticker];
-            const quantity = userPortfolio.stocks[ticker];
-            const currentValue = stock.price * quantity;
-            totalHoldingsValue += currentValue;
-            holdingsHTML += `
-                <div class="bg-gray-700 p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600" data-ticker="${ticker}">
-                    <div>
-                        <p class="font-bold text-white">${stock.name} (${ticker})</p>
-                        <p class="text-sm text-gray-400">${quantity} shares</p>
-                    </div>
-                    <div class="text-right">
-                        <p class="font-semibold text-white">$${currentValue.toFixed(2)}</p>
-                    </div>
-                </div>
-            `;
-        });
-    }
-
-    dashboardPage.innerHTML = `
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-gray-800 p-6 rounded-lg">
-                <h3 class="text-xl font-bold text-white mb-4">Portfolio Summary</h3>
-                <div class="space-y-3">
-                    <div class="flex justify-between"><span class="text-gray-400">Cash Balance</span><span class="font-semibold text-green-400">$${userPortfolio.cash.toFixed(2)}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-400">Stock Holdings Value</span><span class="font-semibold text-blue-400">$${totalHoldingsValue.toFixed(2)}</span></div>
-                    <div class="border-t border-gray-700 my-2"></div>
-                    <div class="flex justify-between"><span class="text-gray-400 font-bold">Net Worth</span><span class="font-bold text-white">$${(userPortfolio.cash + totalHoldingsValue).toFixed(2)}</span></div>
-                </div>
-            </div>
-            <div class="bg-gray-800 p-6 rounded-lg">
-                <h3 class="text-xl font-bold text-white">My Holdings</h3>
-                <div id="holdingsList" class="space-y-3 mt-4">
-                    ${holdingsHTML}
-                </div>
-            </div>
-        </div>
-    `;
-
-    const holdingsList = document.getElementById('holdingsList');
-    if (holdingsList) {
-        holdingsList.addEventListener('click', (e) => {
-            const holdingItem = e.target.closest('[data-ticker]');
-            if (holdingItem) renderStockDetailPage(holdingItem.dataset.ticker);
-        });
-    }
-    const goToTradeBtn = document.getElementById('dashboardGoToTrade');
-    if (goToTradeBtn) {
-        goToTradeBtn.addEventListener('click', () => showPage('tradePage'));
-    }
+    sortedStocks.forEach(stock => {
+        const card = document.createElement('div');
+        card.className = 'bg-gray-800 p-4 rounded-lg shadow-lg cursor-pointer transition transform hover:-translate-y-1 hover:shadow-blue-500/20';
+        card.innerHTML = `<div class="flex justify-between items-baseline"><h3 class="text-lg font-bold text-white">${stock.name}</h3><span class="text-xs font-mono bg-gray-700 px-2 py-1 rounded">${stock.ticker}</span></div><p class="text-sm text-gray-400 mb-2">${stock.sector}</p><p class="text-2xl font-light text-white">$${stock.price.toFixed(2)}</p>`;
+        card.addEventListener('click', () => renderStockDetailPage(stock.id));
+        container.appendChild(card);
+    });
 };
-
 
 const renderOrdersPage = () => {
     ordersPage.innerHTML = `<h3 class="text-xl font-bold mb-4">Pending Orders</h3><div id="pendingOrdersList" class="space-y-3 mb-8"></div>`;
