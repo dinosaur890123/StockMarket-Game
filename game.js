@@ -118,7 +118,42 @@ onAuthStateChanged(auth, user => {
 mainSignInButton.addEventListener('click', () => signInWithPopup(auth, provider));
 
 // --- Core Game Logic ---
-const loadGameData = (userId) => {
+
+// FIX: Re-added the function to create initial companies in the database.
+const initializeMarketInFirestore = async () => {
+    const initialCompanies = [
+        { ticker: 'INNV', name: 'Innovate Corp', sector: 'Tech', basePrice: 150.00, volatility: 1.5 },
+        { ticker: 'HLTH', name: 'Healthwell Inc.', sector: 'Healthcare', basePrice: 220.00, volatility: 0.8 },
+        { ticker: 'ENRG', name: 'Synergy Power', sector: 'Energy', basePrice: 85.50, volatility: 1.3 },
+        { ticker: 'CONS', name: 'Staple Goods Co.', sector: 'Consumer', basePrice: 120.75, volatility: 0.7 },
+        { ticker: 'FINX', name: 'Finix Capital', sector: 'Finance', basePrice: 310.25, volatility: 1.0 },
+    ];
+
+    const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stocks`);
+    const q = query(stocksCollectionRef);
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+        console.log("Market is empty. Initializing stocks in Firestore...");
+        const batch = writeBatch(db);
+        initialCompanies.forEach(company => {
+            const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, company.ticker);
+            batch.set(stockRef, {
+                name: company.name,
+                sector: company.sector,
+                price: company.basePrice,
+                history: [company.basePrice],
+                volatility: company.volatility
+            });
+        });
+        await batch.commit();
+        console.log("Market initialized successfully in Firestore.");
+    }
+};
+
+const loadGameData = async (userId) => {
+    // FIX: Ensure the market is initialized BEFORE trying to subscribe to data.
+    await initializeMarketInFirestore();
     subscribeToStocks();
     subscribeToPortfolio(userId);
     subscribeToOrders(userId);
@@ -253,7 +288,6 @@ const renderTradePage = () => {
 };
 
 const renderDashboardPage = () => {
-    // FIX: This function is now dynamic and shows the user's holdings.
     if (!userPortfolio || !stockData) {
         dashboardPage.innerHTML = `<p class="text-gray-400">Loading dashboard data...</p>`;
         return;
@@ -262,7 +296,7 @@ const renderDashboardPage = () => {
     const holdings = Object.keys(userPortfolio.stocks);
 
     let holdingsHTML = '';
-    if (holdings.length === 0) {
+    if (holdings.length === 0 || holdings.every(ticker => userPortfolio.stocks[ticker] === 0)) {
         holdingsHTML = `<p class="text-gray-400 mt-4">You do not own any stocks. Navigate to the 'Trade' page to get started.</p>`;
     } else {
         holdings.forEach(ticker => {
@@ -272,7 +306,7 @@ const renderDashboardPage = () => {
 
             const currentValue = stock.price * quantity;
             holdingsHTML += `
-                <div class="bg-gray-700 p-4 rounded-lg flex justify-between items-center">
+                <div class="bg-gray-700 p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600" onclick="window.renderStockDetailPage('${ticker}')">
                     <div>
                         <p class="font-bold text-white">${stock.name} (${ticker})</p>
                         <p class="text-sm text-gray-400">${quantity} shares</p>
@@ -328,7 +362,7 @@ ordersPage.addEventListener('click', async e => {
     }
 });
 
-const renderStockDetailPage = (ticker) => {
+window.renderStockDetailPage = (ticker) => {
     const stock = stockData[ticker];
     if (!stock) return;
     pageTitle.textContent = `${stock.name} (${stock.ticker})`;
