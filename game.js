@@ -1,7 +1,7 @@
 // Firebase Imports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs, addDoc, serverTimestamp, where, updateDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs, addDoc, serverTimestamp, where, updateDoc, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -51,6 +51,9 @@ let stockUnsubscribe = null;
 let portfolioUnsubscribe = null;
 let ordersUnsubscribe = null;
 let activeChart = null;
+let marketState = null;
+let marketStateUnsubscribe = null;
+let marketUpdateInterval = null;
 
 // --- Navigation ---
 const showPage = (pageId) => {
@@ -77,7 +80,9 @@ Object.keys(navLinks).forEach(key => {
 
 // --- Authentication ---
 onAuthStateChanged(auth, user => {
-    [stockUnsubscribe, portfolioUnsubscribe, ordersUnsubscribe].forEach(unsub => { if (unsub) unsub(); });
+    [stockUnsubscribe, portfolioUnsubscribe, ordersUnsubscribe, marketStateUnsubscribe].forEach(unsub => { if (unsub) unsub(); });
+    if (marketUpdateInterval) clearInterval(marketUpdateInterval);
+
 
     if (user) {
         currentUserId = user.uid;
@@ -87,7 +92,7 @@ onAuthStateChanged(auth, user => {
         appContainer.style.marginLeft = '16rem';
         authContainer.innerHTML = `<button id="signOutButton" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md">Sign Out</button>`;
         document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
-        showPage('dashboardPage'); // Default to dashboard on login
+        showPage('dashboardPage');
         loadGameData(user.uid);
     } else {
         currentUserId = null;
@@ -99,25 +104,37 @@ onAuthStateChanged(auth, user => {
 });
 mainSignInButton.addEventListener('click', () => signInWithPopup(auth, provider));
 
-// --- Core Game Logic ---
+// --- Core Game Logic & Market Simulation ---
 const initializeMarketInFirestore = async () => {
-    const initialCompanies = [
-        { ticker: 'INNV', name: 'Innovate Corp', sector: 'Tech', basePrice: 150.00, volatility: 1.5 },
-        { ticker: 'HLTH', name: 'Healthwell Inc.', sector: 'Healthcare', basePrice: 220.00, volatility: 0.8 },
-        { ticker: 'ENRG', name: 'Synergy Power', sector: 'Energy', basePrice: 85.50, volatility: 1.3 },
-        { ticker: 'CONS', name: 'Staple Goods Co.', sector: 'Consumer', basePrice: 120.75, volatility: 0.7 },
-        { ticker: 'FINX', name: 'Finix Capital', sector: 'Finance', basePrice: 310.25, volatility: 1.0 },
-    ];
+    // Initialize companies if they don't exist
     const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stocks`);
     const q = query(stocksCollectionRef);
     const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) {
+        console.log("No companies found. Initializing market with default stocks.");
+        const initialCompanies = [
+            { ticker: 'INNV', name: 'Innovate Corp', sector: 'Tech', price: 150.00, volatility: 1.5 },
+            { ticker: 'HLTH', name: 'Healthwell Inc.', sector: 'Healthcare', price: 220.00, volatility: 0.8 },
+            { ticker: 'ENRG', name: 'Synergy Power', sector: 'Energy', price: 85.50, volatility: 1.3 },
+        ];
         const batch = writeBatch(db);
         initialCompanies.forEach(c => {
             const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, c.ticker);
-            batch.set({ ...c, history: [c.basePrice] });
+            batch.set(stockRef, { ...c, history: [c.price] });
         });
         await batch.commit();
+    }
+
+    // Initialize market state if it doesn't exist
+    const marketStateRef = doc(db, `artifacts/${appId}/public/data`, 'market_state');
+    const marketStateSnap = await getDoc(marketStateRef);
+    if (!marketStateSnap.exists()) {
+        console.log("Market state not found. Initializing with default state.");
+        await setDoc(marketStateRef, {
+            is_running: true,
+            tick_interval_seconds: 5,
+            last_update: serverTimestamp()
+        });
     }
 };
 
@@ -126,7 +143,86 @@ const loadGameData = async (userId) => {
     subscribeToStocks();
     subscribeToPortfolio(userId);
     subscribeToOrders(userId);
+    subscribeToMarketState();
 };
+
+const subscribeToMarketState = () => {
+    const marketStateRef = doc(db, `artifacts/${appId}/public/data`, 'market_state');
+    marketStateUnsubscribe = onSnapshot(marketStateRef, (docSnap) => {
+        if (docSnap.exists()) {
+            marketState = docSnap.data();
+            setupMarketUpdateLoop();
+        }
+    });
+};
+
+const setupMarketUpdateLoop = () => {
+    if (marketUpdateInterval) clearInterval(marketUpdateInterval);
+    if (marketState && marketState.is_running) {
+        marketUpdateInterval = setInterval(tryToUpdateMarket, 1000); // Check every second
+    }
+};
+
+const tryToUpdateMarket = async () => {
+    if (!marketState || !marketState.is_running || !marketState.last_update) return;
+
+    const now = Math.floor(Date.now() / 1000);
+    const lastUpdate = marketState.last_update.seconds;
+    const interval = marketState.tick_interval_seconds;
+
+    if ((now - lastUpdate) < interval) return; // Not time yet
+
+    const marketStateRef = doc(db, `artifacts/${appId}/public/data`, 'market_state');
+    let iAmTheUpdater = false;
+    try {
+        await runTransaction(db, async (transaction) => {
+            const stateDoc = await transaction.get(marketStateRef);
+            if (!stateDoc.exists()) throw "Market state document does not exist!";
+            
+            const currentState = stateDoc.data();
+            const currentNow = Math.floor(Date.now() / 1000);
+            const currentLastUpdate = currentState.last_update.seconds;
+
+            if ((currentNow - currentLastUpdate) >= currentState.tick_interval_seconds) {
+                transaction.update(marketStateRef, { last_update: serverTimestamp() });
+                iAmTheUpdater = true;
+            }
+        });
+
+        if (iAmTheUpdater) {
+            console.log(`Client ${currentUserId} is updating the market.`);
+            await updateMarketPrices();
+        }
+    } catch (e) {
+        console.log("Market update race failed (another client likely won):", e);
+    }
+};
+
+const updateMarketPrices = async () => {
+    const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stocks`);
+    const querySnapshot = await getDocs(stocksCollectionRef);
+    if (querySnapshot.empty) return;
+
+    const batch = writeBatch(db);
+    querySnapshot.forEach(docSnap => {
+        const stock = docSnap.data();
+        const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, docSnap.id);
+        const volatility = stock.volatility || 1.0;
+        const changePercent = 2 * volatility * (Math.random() - 0.5);
+        let newPrice = stock.price * (1 + changePercent / 100);
+        newPrice = Math.max(0.01, newPrice);
+
+        const history = stock.history || [];
+        history.push(newPrice);
+        if (history.length > 100) history.shift();
+
+        batch.update(stockRef, { price: newPrice, history: history });
+    });
+
+    await batch.commit();
+    console.log("Market prices successfully updated by this client.");
+};
+
 
 const subscribeToStocks = () => {
     const stocksRef = collection(db, `artifacts/${appId}/public/data/stocks`);
@@ -134,7 +230,12 @@ const subscribeToStocks = () => {
         snapshot.docChanges().forEach(change => {
             const stock = { id: change.doc.id, ...change.doc.data() };
             stockData[stock.id] = stock;
-            if (change.type === "modified") checkPendingOrders(stock);
+            if (change.type === "modified") {
+                 if (document.getElementById('stockDetailPage').classList.contains('hidden') === false && pageTitle.textContent.includes(stock.ticker)) {
+                    renderStockDetailPage(stock.id); // Re-render detail page if it's open
+                }
+                checkPendingOrders(stock);
+            }
         });
         renderTradePage();
         renderDashboardPage();
@@ -208,9 +309,10 @@ const updatePortfolioValue = () => {
 };
 
 const renderTradePage = () => {
-    tradePage.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>`;
-    const container = tradePage.querySelector('div');
-    if (!container) return;
+    const container = tradePage.querySelector('div') || document.createElement('div');
+    container.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5";
+    container.innerHTML = '';
+    
     const sortedStocks = Object.values(stockData).filter(s => s && s.ticker).sort((a, b) => a.ticker.localeCompare(b.ticker));
     sortedStocks.forEach(stock => {
         const card = document.createElement('div');
@@ -219,10 +321,12 @@ const renderTradePage = () => {
         card.addEventListener('click', () => renderStockDetailPage(stock.id));
         container.appendChild(card);
     });
+     if (!tradePage.querySelector('div')) {
+        tradePage.appendChild(container);
+    }
 };
 
 const renderDashboardPage = () => {
-    // UPDATED: Dashboard now shows the market overview, same as the trade page.
     dashboardPage.innerHTML = `<h3 class="text-xl font-bold text-white mb-4">Market Overview</h3><div id="dashboardMarketContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>`;
     const container = dashboardPage.querySelector('#dashboardMarketContainer');
     if (!container) return;

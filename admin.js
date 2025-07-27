@@ -1,7 +1,7 @@
 // Firebase Imports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -37,9 +37,16 @@ const submitButton = document.getElementById('submitButton');
 const clearButton = document.getElementById('clearButton');
 const adminMessageBox = document.getElementById('adminMessageBox');
 const adminMessageText = document.getElementById('adminMessageText');
+// Market Controls
+const toggleMarketBtn = document.getElementById('toggleMarketBtn');
+const marketStatus = document.getElementById('marketStatus');
+const tickIntervalInput = document.getElementById('tickInterval');
+const setTickIntervalBtn = document.getElementById('setTickIntervalBtn');
 
 // --- State ---
 let isEditing = false;
+let currentCompanies = {};
+let marketState = null;
 
 // --- Authentication ---
 onAuthStateChanged(auth, user => {
@@ -59,6 +66,7 @@ onAuthStateChanged(auth, user => {
     } else {
         adminContent.classList.add('hidden');
         unauthorizedMessage.classList.add('hidden');
+        loginPrompt.classList.remove('hidden');
         authContainer.innerHTML = `<button id="signInButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Sign In as Admin</button>`;
         const signInBtn = document.getElementById('signInButton');
         if (signInBtn) signInBtn.addEventListener('click', () => signInWithPopup(auth, provider));
@@ -74,10 +82,61 @@ const showAdminMessage = (text, isError = false) => {
     setTimeout(() => adminMessageBox.classList.add('hidden'), 3000);
 };
 
-// --- Firestore Logic ---
+// --- Market State Control ---
+const marketStateRef = doc(db, `artifacts/${appId}/public/data`, 'market_state');
+
+onSnapshot(marketStateRef, (docSnap) => {
+    if (docSnap.exists()) {
+        marketState = docSnap.data();
+        updateMarketControlsUI();
+    } else {
+        console.log("Market state not found. It will be created when a player logs in.");
+    }
+});
+
+function updateMarketControlsUI() {
+    if (!marketState) return;
+
+    if (marketState.is_running) {
+        marketStatus.textContent = 'Running';
+        marketStatus.className = 'font-semibold text-green-500';
+        toggleMarketBtn.textContent = 'Pause Market';
+        toggleMarketBtn.classList.remove('bg-teal-600', 'hover:bg-teal-700');
+        toggleMarketBtn.classList.add('bg-orange-600', 'hover:bg-orange-700');
+    } else {
+        marketStatus.textContent = 'Paused';
+        marketStatus.className = 'font-semibold text-red-500';
+        toggleMarketBtn.textContent = 'Resume Market';
+        toggleMarketBtn.classList.remove('bg-orange-600', 'hover:bg-orange-700');
+        toggleMarketBtn.classList.add('bg-teal-600', 'hover:bg-teal-700');
+    }
+    tickIntervalInput.value = marketState.tick_interval_seconds;
+}
+
+toggleMarketBtn.addEventListener('click', () => {
+    if (marketState) {
+        updateDoc(marketStateRef, { is_running: !marketState.is_running });
+    }
+});
+
+setTickIntervalBtn.addEventListener('click', () => {
+    const newInterval = parseInt(tickIntervalInput.value);
+    if (!isNaN(newInterval) && newInterval > 0) {
+        updateDoc(marketStateRef, { tick_interval_seconds: newInterval });
+        showAdminMessage(`Interval set to ${newInterval} seconds.`);
+    } else {
+        showAdminMessage('Invalid interval.', true);
+    }
+});
+
+
+// --- Firestore Company Management ---
 const renderCompanyList = (companies) => {
     companyList.innerHTML = '';
-    if (Object.keys(companies).length === 0) return companyList.innerHTML = '<p class="text-gray-400">No companies found.</p>';
+    if (Object.keys(companies).length === 0) {
+        companyList.innerHTML = '<p class="text-gray-400">No companies found.</p>';
+        return;
+    }
     Object.keys(companies).sort().forEach(ticker => {
         const company = companies[ticker];
         const div = document.createElement('div');
@@ -91,6 +150,7 @@ const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stock
 onSnapshot(stocksCollectionRef, (snapshot) => {
     let companies = {};
     snapshot.docs.forEach(doc => { companies[doc.id] = doc.data(); });
+    currentCompanies = companies;
     renderCompanyList(companies);
 }, (error) => {
     console.error("Firestore read error:", error);
@@ -106,13 +166,23 @@ companyForm.addEventListener('submit', async (e) => {
     const price = parseFloat(companyForm.price.value);
     const volatility = parseFloat(companyForm.volatility.value);
     if (!ticker || !name || !sector || isNaN(price) || isNaN(volatility)) return showAdminMessage("Please fill out all fields.", true);
-    const companyData = { name, sector, price, volatility, history: [price] };
+    
     const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, ticker);
+    
     try {
-        await setDoc(stockRef, companyData);
+        let companyData;
+        if (isEditing) {
+            const existingData = currentCompanies[ticker];
+            companyData = { ...existingData, name, sector, price, volatility };
+        } else {
+            companyData = { name, sector, price, volatility, history: [price] };
+        }
+        
+        await setDoc(stockRef, companyData, { merge: true });
         showAdminMessage(`Company ${ticker} saved!`, false);
         clearForm();
     } catch (error) {
+        console.error("Error saving company:", error);
         showAdminMessage("Failed to save company. Check Firestore rules.", true);
     }
 });
@@ -120,25 +190,33 @@ companyForm.addEventListener('submit', async (e) => {
 companyList.addEventListener('click', async (e) => {
     const ticker = e.target.dataset.ticker;
     if (!ticker) return;
-    const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, ticker);
+    
     if (e.target.classList.contains('delete-btn')) {
-        if (confirm(`Delete ${ticker}?`)) {
-            try { await deleteDoc(stockRef); showAdminMessage(`${ticker} deleted.`); } catch (error) { showAdminMessage(`Failed to delete ${ticker}.`, true); }
+        if (confirm(`Are you sure you want to delete ${ticker}? This action cannot be undone.`)) {
+            try {
+                const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, ticker);
+                await deleteDoc(stockRef);
+                showAdminMessage(`${ticker} deleted successfully.`);
+            } catch (error) {
+                console.error("Error deleting company:", error);
+                showAdminMessage(`Failed to delete ${ticker}.`, true);
+            }
         }
     }
+    
     if (e.target.classList.contains('edit-btn')) {
-        const docSnap = await getDoc(stockRef);
-        if (docSnap.exists()) {
-            const data = docSnap.data();
+        const company = currentCompanies[ticker];
+        if (company) {
             formTitle.textContent = `Editing ${ticker}`;
             tickerInput.value = ticker;
             tickerInput.disabled = true;
-            companyForm.name.value = data.name;
-            companyForm.sector.value = data.sector;
-            companyForm.price.value = data.price;
-            companyForm.volatility.value = data.volatility;
+            companyForm.name.value = company.name;
+            companyForm.sector.value = company.sector;
+            companyForm.price.value = company.price;
+            companyForm.volatility.value = company.volatility;
             submitButton.textContent = 'Update Company';
             isEditing = true;
+            window.scrollTo(0, 0);
         }
     }
 });
