@@ -104,10 +104,23 @@ onAuthStateChanged(auth, user => {
 });
 mainSignInButton.addEventListener('click', () => signInWithPopup(auth, provider));
 
-// --- Core Game Logic & Market Simulation ---
+// --- Core Game Logic & Market Simulation (Corrected Paths) ---
 const initializeMarketInFirestore = async () => {
+    const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
+    const stocksCollectionRef = collection(db, `artifacts/${appId}/public/market/stocks`);
+
+    // Initialize market state if it doesn't exist
+    const marketStateSnap = await getDoc(marketDocRef);
+    if (!marketStateSnap.exists()) {
+        console.log("Market document not found. Initializing with default state.");
+        await setDoc(marketDocRef, {
+            is_running: true,
+            tick_interval_seconds: 5,
+            last_update: serverTimestamp()
+        });
+    }
+
     // Initialize companies if they don't exist
-    const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stocks`);
     const q = query(stocksCollectionRef);
     const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) {
@@ -119,22 +132,10 @@ const initializeMarketInFirestore = async () => {
         ];
         const batch = writeBatch(db);
         initialCompanies.forEach(c => {
-            const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, c.ticker);
+            const stockRef = doc(stocksCollectionRef, c.ticker);
             batch.set(stockRef, { ...c, history: [c.price] });
         });
         await batch.commit();
-    }
-
-    // Initialize market state if it doesn't exist
-    const marketStateRef = doc(db, `artifacts/${appId}/public/data`, 'market_state');
-    const marketStateSnap = await getDoc(marketStateRef);
-    if (!marketStateSnap.exists()) {
-        console.log("Market state not found. Initializing with default state.");
-        await setDoc(marketStateRef, {
-            is_running: true,
-            tick_interval_seconds: 5,
-            last_update: serverTimestamp()
-        });
     }
 };
 
@@ -147,8 +148,8 @@ const loadGameData = async (userId) => {
 };
 
 const subscribeToMarketState = () => {
-    const marketStateRef = doc(db, `artifacts/${appId}/public/data`, 'market_state');
-    marketStateUnsubscribe = onSnapshot(marketStateRef, (docSnap) => {
+    const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
+    marketStateUnsubscribe = onSnapshot(marketDocRef, (docSnap) => {
         if (docSnap.exists()) {
             marketState = docSnap.data();
             setupMarketUpdateLoop();
@@ -172,19 +173,19 @@ const tryToUpdateMarket = async () => {
 
     if ((now - lastUpdate) < interval) return; // Not time yet
 
-    const marketStateRef = doc(db, `artifacts/${appId}/public/data`, 'market_state');
+    const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
     let iAmTheUpdater = false;
     try {
         await runTransaction(db, async (transaction) => {
-            const stateDoc = await transaction.get(marketStateRef);
-            if (!stateDoc.exists()) throw "Market state document does not exist!";
+            const stateDoc = await transaction.get(marketDocRef);
+            if (!stateDoc.exists()) throw "Market document does not exist!";
             
             const currentState = stateDoc.data();
             const currentNow = Math.floor(Date.now() / 1000);
             const currentLastUpdate = currentState.last_update.seconds;
 
             if ((currentNow - currentLastUpdate) >= currentState.tick_interval_seconds) {
-                transaction.update(marketStateRef, { last_update: serverTimestamp() });
+                transaction.update(marketDocRef, { last_update: serverTimestamp() });
                 iAmTheUpdater = true;
             }
         });
@@ -199,14 +200,14 @@ const tryToUpdateMarket = async () => {
 };
 
 const updateMarketPrices = async () => {
-    const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stocks`);
+    const stocksCollectionRef = collection(db, `artifacts/${appId}/public/market/stocks`);
     const querySnapshot = await getDocs(stocksCollectionRef);
     if (querySnapshot.empty) return;
 
     const batch = writeBatch(db);
     querySnapshot.forEach(docSnap => {
         const stock = docSnap.data();
-        const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, docSnap.id);
+        const stockRef = doc(stocksCollectionRef, docSnap.id);
         const volatility = stock.volatility || 1.0;
         const changePercent = 2 * volatility * (Math.random() - 0.5);
         let newPrice = stock.price * (1 + changePercent / 100);
@@ -225,7 +226,7 @@ const updateMarketPrices = async () => {
 
 
 const subscribeToStocks = () => {
-    const stocksRef = collection(db, `artifacts/${appId}/public/data/stocks`);
+    const stocksRef = collection(db, `artifacts/${appId}/public/market/stocks`);
     stockUnsubscribe = onSnapshot(stocksRef, snapshot => {
         snapshot.docChanges().forEach(change => {
             const stock = { id: change.doc.id, ...change.doc.data() };
@@ -335,6 +336,7 @@ const renderDashboardPage = () => {
         container.innerHTML = `<p class="text-gray-400">Market data is loading...</p>`;
         return;
     }
+    container.innerHTML = '';
     sortedStocks.forEach(stock => {
         const card = document.createElement('div');
         card.className = 'bg-gray-800 p-4 rounded-lg shadow-lg cursor-pointer transition transform hover:-translate-y-1 hover:shadow-blue-500/20';
@@ -351,6 +353,7 @@ const renderOrdersPage = () => {
     if (pendingOrders.length === 0) {
         pendingList.innerHTML = `<p class="text-gray-400">You have no pending orders.</p>`;
     } else {
+        pendingList.innerHTML = '';
         pendingOrders.forEach(order => {
             const div = document.createElement('div');
             div.className = 'bg-gray-800 p-4 rounded-lg flex justify-between items-center';

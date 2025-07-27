@@ -82,15 +82,15 @@ const showAdminMessage = (text, isError = false) => {
     setTimeout(() => adminMessageBox.classList.add('hidden'), 3000);
 };
 
-// --- Market State Control ---
-const marketStateRef = doc(db, `artifacts/${appId}/public/data`, 'market_state');
+// --- Market State Control (Corrected Path) ---
+const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
 
-onSnapshot(marketStateRef, (docSnap) => {
+onSnapshot(marketDocRef, (docSnap) => {
     if (docSnap.exists()) {
         marketState = docSnap.data();
         updateMarketControlsUI();
     } else {
-        console.log("Market state not found. It will be created when a player logs in.");
+        console.log("Market document not found. It will be created when a player logs in.");
     }
 });
 
@@ -115,14 +115,14 @@ function updateMarketControlsUI() {
 
 toggleMarketBtn.addEventListener('click', () => {
     if (marketState) {
-        updateDoc(marketStateRef, { is_running: !marketState.is_running });
+        updateDoc(marketDocRef, { is_running: !marketState.is_running });
     }
 });
 
 setTickIntervalBtn.addEventListener('click', () => {
     const newInterval = parseInt(tickIntervalInput.value);
     if (!isNaN(newInterval) && newInterval > 0) {
-        updateDoc(marketStateRef, { tick_interval_seconds: newInterval });
+        updateDoc(marketDocRef, { tick_interval_seconds: newInterval });
         showAdminMessage(`Interval set to ${newInterval} seconds.`);
     } else {
         showAdminMessage('Invalid interval.', true);
@@ -130,7 +130,9 @@ setTickIntervalBtn.addEventListener('click', () => {
 });
 
 
-// --- Firestore Company Management ---
+// --- Firestore Company Management (Corrected Path) ---
+const stocksCollectionRef = collection(db, `artifacts/${appId}/public/market/stocks`);
+
 const renderCompanyList = (companies) => {
     companyList.innerHTML = '';
     if (Object.keys(companies).length === 0) {
@@ -146,7 +148,7 @@ const renderCompanyList = (companies) => {
     });
 };
 
-const stocksCollectionRef = collection(db, `artifacts/${appId}/public/data/stocks`);
+
 onSnapshot(stocksCollectionRef, (snapshot) => {
     let companies = {};
     snapshot.docs.forEach(doc => { companies[doc.id] = doc.data(); });
@@ -157,7 +159,7 @@ onSnapshot(stocksCollectionRef, (snapshot) => {
     showAdminMessage("Could not load company data. Check Firestore rules.", true);
 });
 
-// --- Form Handling ---
+// --- Form Handling (Corrected Path) ---
 companyForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const ticker = companyForm.ticker.value.toUpperCase();
@@ -167,7 +169,7 @@ companyForm.addEventListener('submit', async (e) => {
     const volatility = parseFloat(companyForm.volatility.value);
     if (!ticker || !name || !sector || isNaN(price) || isNaN(volatility)) return showAdminMessage("Please fill out all fields.", true);
     
-    const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, ticker);
+    const stockRef = doc(db, `artifacts/${appId}/public/market/stocks`, ticker);
     
     try {
         let companyData;
@@ -191,10 +193,12 @@ companyList.addEventListener('click', async (e) => {
     const ticker = e.target.dataset.ticker;
     if (!ticker) return;
     
+    // Corrected Path for delete/edit
+    const stockRef = doc(db, `artifacts/${appId}/public/market/stocks`, ticker);
+
     if (e.target.classList.contains('delete-btn')) {
         if (confirm(`Are you sure you want to delete ${ticker}? This action cannot be undone.`)) {
             try {
-                const stockRef = doc(db, `artifacts/${appId}/public/data/stocks`, ticker);
                 await deleteDoc(stockRef);
                 showAdminMessage(`${ticker} deleted successfully.`);
             } catch (error) {
