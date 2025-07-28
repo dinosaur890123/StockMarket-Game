@@ -356,7 +356,6 @@ const renderTradePage = () => {
 };
 
 const renderDashboardPage = () => {
-    // This function is now simpler as the news feed is always visible in the dashboard container
     const marketContainer = dashboardPage.querySelector('#dashboardMarketContainer') || document.createElement('div');
     if (!dashboardPage.querySelector('#dashboardMarketContainer')) {
         const title = document.createElement('h3');

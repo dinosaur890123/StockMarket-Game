@@ -1,7 +1,7 @@
 // Firebase Imports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, getDocs, addDoc, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -33,8 +33,6 @@ const companyList = document.getElementById('companyList');
 const companyForm = document.getElementById('companyForm');
 const formTitle = document.getElementById('formTitle');
 const tickerInput = document.getElementById('ticker');
-const submitButton = document.getElementById('submitButton');
-const clearButton = document.getElementById('clearButton');
 const adminMessageBox = document.getElementById('adminMessageBox');
 const adminMessageText = document.getElementById('adminMessageText');
 // Market Controls
@@ -42,6 +40,12 @@ const toggleMarketBtn = document.getElementById('toggleMarketBtn');
 const marketStatus = document.getElementById('marketStatus');
 const tickIntervalInput = document.getElementById('tickInterval');
 const setTickIntervalBtn = document.getElementById('setTickIntervalBtn');
+// Manual News
+const manualNewsForm = document.getElementById('manualNewsForm');
+const newsTickerSelect = document.getElementById('newsTicker');
+// Player Management
+const playerList = document.getElementById('playerList');
+
 
 // --- State ---
 let isEditing = false;
@@ -57,6 +61,8 @@ onAuthStateChanged(auth, user => {
             unauthorizedMessage.classList.add('hidden');
             authContainer.innerHTML = `<div class="flex items-center space-x-4"><p class="text-sm text-yellow-300">Admin: ${user.displayName}</p><button id="signOutButton" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></div>`;
             document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
+            // Load admin-only data
+            loadPlayerData();
         } else {
             adminContent.classList.add('hidden');
             unauthorizedMessage.classList.remove('hidden');
@@ -82,43 +88,26 @@ const showAdminMessage = (text, isError = false) => {
     setTimeout(() => adminMessageBox.classList.add('hidden'), 3000);
 };
 
-// --- Market State Control (Corrected Path) ---
+// --- Market State Control ---
 const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
-
 onSnapshot(marketDocRef, (docSnap) => {
     if (docSnap.exists()) {
         marketState = docSnap.data();
-        updateMarketControlsUI();
-    } else {
-        console.log("Market document not found. It will be created when a player logs in.");
+        tickIntervalInput.value = marketState.tick_interval_seconds;
+        if (marketState.is_running) {
+            marketStatus.textContent = 'Running';
+            marketStatus.className = 'font-semibold text-green-500';
+            toggleMarketBtn.textContent = 'Pause Market';
+        } else {
+            marketStatus.textContent = 'Paused';
+            marketStatus.className = 'font-semibold text-red-500';
+            toggleMarketBtn.textContent = 'Resume Market';
+        }
     }
 });
-
-function updateMarketControlsUI() {
-    if (!marketState) return;
-
-    if (marketState.is_running) {
-        marketStatus.textContent = 'Running';
-        marketStatus.className = 'font-semibold text-green-500';
-        toggleMarketBtn.textContent = 'Pause Market';
-        toggleMarketBtn.classList.remove('bg-teal-600', 'hover:bg-teal-700');
-        toggleMarketBtn.classList.add('bg-orange-600', 'hover:bg-orange-700');
-    } else {
-        marketStatus.textContent = 'Paused';
-        marketStatus.className = 'font-semibold text-red-500';
-        toggleMarketBtn.textContent = 'Resume Market';
-        toggleMarketBtn.classList.remove('bg-orange-600', 'hover:bg-orange-700');
-        toggleMarketBtn.classList.add('bg-teal-600', 'hover:bg-teal-700');
-    }
-    tickIntervalInput.value = marketState.tick_interval_seconds;
-}
-
 toggleMarketBtn.addEventListener('click', () => {
-    if (marketState) {
-        updateDoc(marketDocRef, { is_running: !marketState.is_running });
-    }
+    if (marketState) updateDoc(marketDocRef, { is_running: !marketState.is_running });
 });
-
 setTickIntervalBtn.addEventListener('click', () => {
     const newInterval = parseInt(tickIntervalInput.value);
     if (!isNaN(newInterval) && newInterval > 0) {
@@ -129,14 +118,146 @@ setTickIntervalBtn.addEventListener('click', () => {
     }
 });
 
+// --- Manual News Event ---
+manualNewsForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const headline = manualNewsForm.newsHeadline.value;
+    const ticker = manualNewsForm.newsTicker.value;
+    const impact = parseFloat(manualNewsForm.newsImpact.value);
 
-// --- Firestore Company Management (Corrected Path) ---
+    if (!headline || !ticker || isNaN(impact)) {
+        return showAdminMessage("Please fill all news fields.", true);
+    }
+
+    const newsRef = collection(db, `artifacts/${appId}/public/market/news`);
+    await addDoc(newsRef, {
+        headline,
+        ticker,
+        impact_percent: impact,
+        sentiment: Math.sign(impact),
+        timestamp: serverTimestamp(),
+        is_active: true,
+        source: 'manual'
+    });
+
+    showAdminMessage("Manual news event broadcasted!");
+    manualNewsForm.reset();
+});
+
+// --- Player Management ---
+async function loadPlayerData() {
+    const usersRef = collection(db, `artifacts/${appId}/users`);
+    try {
+        const userSnapshots = await getDocs(usersRef);
+        const players = [];
+        for (const userDoc of userSnapshots.docs) {
+            const portfolioRef = doc(db, `artifacts/${appId}/users/${userDoc.id}/portfolio/main`);
+            const portfolioSnap = await getDoc(portfolioRef);
+            if (portfolioSnap.exists()) {
+                players.push({ id: userDoc.id, portfolio: portfolioSnap.data() });
+            }
+        }
+        renderPlayerList(players);
+    } catch (error) {
+        console.error("Error loading player data:", error);
+        playerList.innerHTML = `<p class="text-red-400">Could not load player data. Check Firestore rules.</p>`;
+    }
+}
+
+function renderPlayerList(players) {
+    playerList.innerHTML = '';
+    if (players.length === 0) {
+        playerList.innerHTML = '<p class="text-gray-400">No players found.</p>';
+        return;
+    }
+
+    players.forEach(player => {
+        const portfolio = player.portfolio;
+        let stockValue = 0;
+        if (portfolio.stocks) {
+            stockValue = Object.keys(portfolio.stocks).reduce((acc, ticker) => {
+                return acc + (portfolio.stocks[ticker] * (currentCompanies[ticker]?.price || 0));
+            }, 0);
+        }
+        const netWorth = portfolio.cash + stockValue;
+
+        const playerCard = document.createElement('div');
+        playerCard.className = 'bg-gray-700 p-4 rounded-lg';
+        playerCard.innerHTML = `
+            <p class="text-sm font-mono text-gray-400 truncate" title="${player.id}">${player.id}</p>
+            <div class="flex justify-between items-center mt-2">
+                <div>
+                    <p class="text-lg font-bold text-white">Net Worth: $${netWorth.toFixed(2)}</p>
+                    <p class="text-sm text-green-400">Cash: $${portfolio.cash.toFixed(2)}</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button data-id="${player.id}" class="add-cash-btn bg-green-600 hover:bg-green-700 p-2 rounded text-xs">Award Cash</button>
+                    <button data-id="${player.id}" class="reset-btn bg-red-600 hover:bg-red-700 p-2 rounded text-xs">Reset</button>
+                </div>
+            </div>
+        `;
+        playerList.appendChild(playerCard);
+    });
+}
+
+playerList.addEventListener('click', async (e) => {
+    const userId = e.target.dataset.id;
+    if (!userId) return;
+
+    const portfolioRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio/main`);
+
+    if (e.target.classList.contains('add-cash-btn')) {
+        const amountStr = prompt(`Enter amount of cash to award to user ${userId}:`);
+        const amount = parseFloat(amountStr);
+        if (!isNaN(amount) && amount > 0) {
+            await updateDoc(portfolioRef, {
+                cash: increment(amount)
+            });
+            showAdminMessage(`Awarded $${amount} to user.`);
+            loadPlayerData(); // Refresh list
+        } else {
+            showAdminMessage("Invalid amount.", true);
+        }
+    }
+
+    if (e.target.classList.contains('reset-btn')) {
+        if (confirm(`Are you sure you want to reset user ${userId}'s account? This is irreversible.`)) {
+            await setDoc(portfolioRef, {
+                cash: 20000,
+                stocks: {}
+            });
+            showAdminMessage(`User ${userId} has been reset.`);
+            loadPlayerData(); // Refresh list
+        }
+    }
+});
+
+
+// --- Company Management ---
 const stocksCollectionRef = collection(db, `artifacts/${appId}/public/market/stocks`);
+onSnapshot(stocksCollectionRef, (snapshot) => {
+    let companies = {};
+    newsTickerSelect.innerHTML = '<option value="">Select Target Company</option>';
+    snapshot.docs.forEach(doc => {
+        companies[doc.id] = doc.data();
+        const option = document.createElement('option');
+        option.value = doc.id;
+        option.textContent = `${doc.data().name} (${doc.id})`;
+        newsTickerSelect.appendChild(option);
+    });
+    currentCompanies = companies;
+    renderCompanyList(companies);
+    if (auth.currentUser?.uid === ADMIN_UID) loadPlayerData(); // Refresh player net worths when prices change
+}, (error) => {
+    console.error("Firestore read error:", error);
+    showAdminMessage("Could not load company data.", true);
+});
 
-const renderCompanyList = (companies) => {
-    companyList.innerHTML = '';
+function renderCompanyList(companies) {
+    const companyListEl = document.getElementById('companyList');
+    companyListEl.innerHTML = '';
     if (Object.keys(companies).length === 0) {
-        companyList.innerHTML = '<p class="text-gray-400">No companies found.</p>';
+        companyListEl.innerHTML = '<p class="text-gray-400">No companies found.</p>';
         return;
     }
     Object.keys(companies).sort().forEach(ticker => {
@@ -144,67 +265,20 @@ const renderCompanyList = (companies) => {
         const div = document.createElement('div');
         div.className = 'bg-gray-700 p-4 rounded-lg flex justify-between items-center';
         div.innerHTML = `<div><p class="font-bold text-lg text-white">${company.name} (${ticker})</p><p class="text-sm text-gray-400">Sector: ${company.sector} | Price: $${company.price.toFixed(2)} | Vol: ${company.volatility}</p></div><div class="space-x-2"><button data-ticker="${ticker}" class="edit-btn bg-yellow-500 p-2 rounded">Edit</button><button data-ticker="${ticker}" class="delete-btn bg-red-600 p-2 rounded">Delete</button></div>`;
-        companyList.appendChild(div);
+        companyListEl.appendChild(div);
     });
-};
-
-
-onSnapshot(stocksCollectionRef, (snapshot) => {
-    let companies = {};
-    snapshot.docs.forEach(doc => { companies[doc.id] = doc.data(); });
-    currentCompanies = companies;
-    renderCompanyList(companies);
-}, (error) => {
-    console.error("Firestore read error:", error);
-    showAdminMessage("Could not load company data. Check Firestore rules.", true);
-});
-
-// --- Form Handling (Corrected Path) ---
-companyForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const ticker = companyForm.ticker.value.toUpperCase();
-    const name = companyForm.name.value;
-    const sector = companyForm.sector.value;
-    const price = parseFloat(companyForm.price.value);
-    const volatility = parseFloat(companyForm.volatility.value);
-    if (!ticker || !name || !sector || isNaN(price) || isNaN(volatility)) return showAdminMessage("Please fill out all fields.", true);
-    
-    const stockRef = doc(db, `artifacts/${appId}/public/market/stocks`, ticker);
-    
-    try {
-        let companyData;
-        if (isEditing) {
-            const existingData = currentCompanies[ticker];
-            companyData = { ...existingData, name, sector, price, volatility };
-        } else {
-            companyData = { name, sector, price, volatility, history: [price] };
-        }
-        
-        await setDoc(stockRef, companyData, { merge: true });
-        showAdminMessage(`Company ${ticker} saved!`, false);
-        clearForm();
-    } catch (error) {
-        console.error("Error saving company:", error);
-        showAdminMessage("Failed to save company. Check Firestore rules.", true);
-    }
-});
+}
 
 companyList.addEventListener('click', async (e) => {
     const ticker = e.target.dataset.ticker;
     if (!ticker) return;
     
-    // Corrected Path for delete/edit
     const stockRef = doc(db, `artifacts/${appId}/public/market/stocks`, ticker);
 
     if (e.target.classList.contains('delete-btn')) {
-        if (confirm(`Are you sure you want to delete ${ticker}? This action cannot be undone.`)) {
-            try {
-                await deleteDoc(stockRef);
-                showAdminMessage(`${ticker} deleted successfully.`);
-            } catch (error) {
-                console.error("Error deleting company:", error);
-                showAdminMessage(`Failed to delete ${ticker}.`, true);
-            }
+        if (confirm(`Are you sure you want to delete ${ticker}?`)) {
+            await deleteDoc(stockRef);
+            showAdminMessage(`${ticker} deleted.`);
         }
     }
     
@@ -212,24 +286,47 @@ companyList.addEventListener('click', async (e) => {
         const company = currentCompanies[ticker];
         if (company) {
             formTitle.textContent = `Editing ${ticker}`;
-            tickerInput.value = ticker;
-            tickerInput.disabled = true;
-            companyForm.name.value = company.name;
-            companyForm.sector.value = company.sector;
-            companyForm.price.value = company.price;
-            companyForm.volatility.value = company.volatility;
-            submitButton.textContent = 'Update Company';
+            document.getElementById('ticker').value = ticker;
+            document.getElementById('ticker').disabled = true;
+            document.getElementById('name').value = company.name;
+            document.getElementById('sector').value = company.sector;
+            document.getElementById('price').value = company.price;
+            document.getElementById('volatility').value = company.volatility;
+            document.getElementById('submitButton').textContent = 'Update Company';
             isEditing = true;
             window.scrollTo(0, 0);
         }
     }
 });
 
-const clearForm = () => {
+companyForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const ticker = document.getElementById('ticker').value.toUpperCase();
+    const name = document.getElementById('name').value;
+    const sector = document.getElementById('sector').value;
+    const price = parseFloat(document.getElementById('price').value);
+    const volatility = parseFloat(document.getElementById('volatility').value);
+    if (!ticker || !name || !sector || isNaN(price) || isNaN(volatility)) return showAdminMessage("Please fill out all fields.", true);
+    
+    const stockRef = doc(db, `artifacts/${appId}/public/market/stocks`, ticker);
+    
+    let companyData;
+    if (isEditing) {
+        const existingData = currentCompanies[ticker];
+        companyData = { ...existingData, name, sector, price, volatility };
+    } else {
+        companyData = { name, sector, price, volatility, history: [price] };
+    }
+    
+    await setDoc(stockRef, companyData, { merge: true });
+    showAdminMessage(`Company ${ticker} saved!`);
+    clearForm();
+});
+
+function clearForm() {
     companyForm.reset();
-    formTitle.textContent = 'Add New Company';
-    tickerInput.disabled = false;
-    submitButton.textContent = 'Add Company';
+    document.getElementById('ticker').disabled = false;
+    document.getElementById('submitButton').textContent = 'Add Company';
     isEditing = false;
 };
-clearButton.addEventListener('click', clearForm);
+document.getElementById('clearButton').addEventListener('click', clearForm);
