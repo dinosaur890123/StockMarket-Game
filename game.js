@@ -95,7 +95,7 @@ onAuthStateChanged(auth, user => {
         mainContent.classList.remove('hidden');
         loginPage.classList.add('hidden');
         appContainer.style.marginLeft = '16rem';
-        authContainer.innerHTML = `<div class="flex items-center space-x-4"><img src="${user.photoURL}" class="w-8 h-8 rounded-full"><p>${user.displayName}</p><button id="signOutButton" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md mt-4">Sign Out</button></div>`;
+        authContainer.innerHTML = `<div class="flex flex-col items-center space-y-4"><img src="${user.photoURL}" class="w-16 h-16 rounded-full"><p>${user.displayName}</p><button id="signOutButton" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md mt-4">Sign Out</button></div>`;
         document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
         showPage('dashboardPage');
         loadGameData(user.uid);
