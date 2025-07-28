@@ -28,7 +28,6 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
         }
 
         // --- 2. Generate AI News (less frequently) ---
-        // We can use the event object to run this less often, e.g. every 15 mins
         const minute = new Date(event.scheduleTime).getMinutes();
         if (minute % 15 === 0) {
             logger.log("Generating AI news...");
@@ -83,8 +82,9 @@ async function updateLeaderboard(stocks) {
     players.sort((a, b) => b.netWorth - a.netWorth);
     const topPlayers = players.slice(0, 20); // Get top 20
 
-    const leaderboardRef = db.doc("artifacts/stock-market-game-v1/public/market/leaderboard");
-    await leaderboardRef.set({ players: topPlayers, lastUpdated: new Date() });
+    // CORRECTED PATH: Update the main market document with a 'leaderboard' field.
+    const marketDocRef = db.doc("artifacts/stock-market-game-v1/public/market");
+    await marketDocRef.update({ leaderboard: topPlayers, leaderboardLastUpdated: new Date() });
 }
 
 async function getStocks() {

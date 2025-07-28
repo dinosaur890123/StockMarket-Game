@@ -55,10 +55,9 @@ let stockUnsubscribe = null;
 let portfolioUnsubscribe = null;
 let ordersUnsubscribe = null;
 let newsUnsubscribe = null;
-let leaderboardUnsubscribe = null;
+let marketDataUnsubscribe = null; // Renamed from leaderboardUnsubscribe
 let activeChart = null;
 let marketState = null;
-let marketStateUnsubscribe = null;
 let marketUpdateInterval = null;
 
 // --- Navigation ---
@@ -86,7 +85,7 @@ Object.keys(navLinks).forEach(key => {
 
 // --- Authentication ---
 onAuthStateChanged(auth, user => {
-    [stockUnsubscribe, portfolioUnsubscribe, ordersUnsubscribe, marketStateUnsubscribe, newsUnsubscribe, leaderboardUnsubscribe].forEach(unsub => { if (unsub) unsub(); });
+    [stockUnsubscribe, portfolioUnsubscribe, ordersUnsubscribe, marketDataUnsubscribe, newsUnsubscribe].forEach(unsub => { if (unsub) unsub(); });
     if (marketUpdateInterval) clearInterval(marketUpdateInterval);
 
     if (user) {
@@ -116,16 +115,23 @@ const loadGameData = async (userId) => {
     subscribeToStocks();
     subscribeToPortfolio(userId);
     subscribeToOrders(userId);
-    subscribeToMarketState();
+    subscribeToMarketData(); // Combined listener for market state and leaderboard
     subscribeToNews();
-    subscribeToLeaderboard();
 };
 
-const subscribeToLeaderboard = () => {
-    const leaderboardRef = doc(db, `artifacts/${appId}/public/market/leaderboard`);
-    leaderboardUnsubscribe = onSnapshot(leaderboardRef, (docSnap) => {
+// Combined listener for market document
+const subscribeToMarketData = () => {
+    const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
+    marketDataUnsubscribe = onSnapshot(marketDocRef, (docSnap) => {
         if (docSnap.exists()) {
-            renderLeaderboard(docSnap.data().players);
+            const marketData = docSnap.data();
+            
+            // Handle market state for price updates
+            marketState = marketData;
+            setupMarketUpdateLoop();
+
+            // Handle leaderboard rendering
+            renderLeaderboard(marketData.leaderboard || []);
         } else {
             renderLeaderboard([]);
         }
@@ -199,16 +205,6 @@ const initializeMarketInFirestore = async () => {
         });
         await batch.commit();
     }
-};
-
-const subscribeToMarketState = () => {
-    const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
-    marketStateUnsubscribe = onSnapshot(marketDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-            marketState = docSnap.data();
-            setupMarketUpdateLoop();
-        }
-    });
 };
 
 const setupMarketUpdateLoop = () => {
