@@ -94,13 +94,8 @@ onAuthStateChanged(auth, user => {
         sidebar.classList.remove('hidden');
         mainContent.classList.remove('hidden');
         loginPage.classList.add('hidden');
-        appContainer.style.marginLeft = '256px';
-        authContainer.innerHTML = `
-            <div class="auth-info">
-                <img src="${user.photoURL || 'https://placehold.co/40x40/7f8c8d/ecf0f1?text=?'}" alt="User Photo">
-                <p>${user.displayName}</p>
-            </div>
-            <button id="signOutButton" class="danger">Sign Out</button>`;
+        appContainer.style.marginLeft = '16rem';
+        authContainer.innerHTML = `<div class="flex items-center space-x-4"><img src="${user.photoURL}" class="w-8 h-8 rounded-full"><p>${user.displayName}</p><button id="signOutButton" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md mt-4">Sign Out</button></div>`;
         document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
         showPage('dashboardPage');
         loadGameData(user.uid);
@@ -139,39 +134,39 @@ const subscribeToLeaderboard = () => {
 
 const renderLeaderboard = (players) => {
     leaderboardPage.innerHTML = `
-        <div class="section">
-            <h2>Top Players by Net Worth</h2>
-            <div id="leaderboardList"></div>
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+            <h2 class="text-2xl font-bold text-white mb-4">Top Players by Net Worth</h2>
+            <div id="leaderboardList" class="space-y-3"></div>
         </div>
     `;
     const listEl = leaderboardPage.querySelector('#leaderboardList');
     if (!players || players.length === 0) {
-        listEl.innerHTML = '<p>Leaderboard is being calculated...</p>';
+        listEl.innerHTML = '<p class="text-gray-400">Leaderboard is being calculated...</p>';
         return;
     }
 
     players.forEach((player, index) => {
         const rank = index + 1;
         const playerCard = document.createElement('div');
-        playerCard.className = 'leaderboard-card';
+        playerCard.className = 'flex items-center justify-between bg-gray-700 p-4 rounded-lg';
         
-        let rankClass = '';
-        if (rank === 1) rankClass = 'gold';
-        if (rank === 2) rankClass = 'silver';
-        if (rank === 3) rankClass = 'bronze';
+        let rankColor = 'text-gray-400';
+        if (rank === 1) rankColor = 'text-yellow-400';
+        if (rank === 2) rankColor = 'text-gray-300';
+        if (rank === 3) rankColor = 'text-yellow-600';
 
         playerCard.innerHTML = `
-            <div style="display: flex; align-items: center;">
-                <span class="rank ${rankClass}">${rank}</span>
-                <img src="${player.photoURL || 'https://placehold.co/40x40/7f8c8d/ecf0f1?text=?'}" alt="Player photo">
+            <div class="flex items-center">
+                <span class="text-2xl font-bold w-10 ${rankColor}">${rank}</span>
+                <img src="${player.photoURL || 'https://placehold.co/40x40/7f8c8d/ecf0f1?text=?'}" class="w-10 h-10 rounded-full mr-4">
                 <div>
-                    <p style="font-weight: 700;">${player.displayName || 'Anonymous Player'}</p>
-                    <p style="color: var(--text-muted);">Net Worth: $${player.netWorth.toFixed(2)}</p>
+                    <p class="font-bold text-white">${player.displayName || 'Anonymous Player'}</p>
+                    <p class="text-sm text-gray-400">Net Worth: $${player.netWorth.toFixed(2)}</p>
                 </div>
             </div>
-            <div style="text-align: right;">
-                <p style="color: var(--green);">Cash: $${player.cash.toFixed(2)}</p>
-                <p style="color: var(--text-accent);">Stocks: $${player.stockValue.toFixed(2)}</p>
+            <div class="text-right">
+                <p class="text-sm text-green-400">Cash: $${player.cash.toFixed(2)}</p>
+                <p class="text-sm text-blue-400">Stocks: $${player.stockValue.toFixed(2)}</p>
             </div>
         `;
         listEl.appendChild(playerCard);
@@ -283,14 +278,14 @@ const renderNewsFeed = () => {
     if (!newsFeedContainer) return;
     newsFeedContainer.innerHTML = '';
     if (activeNews.length === 0) {
-        newsFeedContainer.innerHTML = '<p>No recent news.</p>';
+        newsFeedContainer.innerHTML = '<p class="text-gray-400">No recent news.</p>';
         return;
     }
     activeNews.forEach(news => {
         const div = document.createElement('div');
-        const sentimentClass = news.sentiment > 0 ? 'positive' : 'negative';
-        div.className = `news-item ${sentimentClass}`;
-        div.innerHTML = `<p>${news.headline}</p><p>${new Date(news.timestamp.seconds * 1000).toLocaleTimeString()}</p>`;
+        const sentimentColor = news.sentiment > 0 ? 'border-green-500' : 'border-red-500';
+        div.className = `border-l-4 p-2 ${sentimentColor}`;
+        div.innerHTML = `<p class="text-sm text-gray-300">${news.headline}</p><p class="text-xs text-gray-500">${new Date(news.timestamp.seconds * 1000).toLocaleTimeString()}</p>`;
         newsFeedContainer.appendChild(div);
     });
 };
@@ -364,7 +359,8 @@ const executeSpecialOrder = async (order) => {
         newPortfolio.stocks[order.ticker] = (newPortfolio.stocks[order.ticker] || 0) + order.quantity;
     } else {
         newPortfolio.cash += cost;
-        newPortfolio.stocks[order.ticker] -= order.quantity;
+        newPortfolio.stocks[order.ticker] -= quantity;
+        if(newPortfolio.stocks[order.ticker] === 0) delete newPortfolio.stocks[order.ticker];
     }
     const batch = writeBatch(db);
     batch.set(portfolioRef, newPortfolio);
@@ -383,19 +379,20 @@ const updatePortfolioValue = () => {
 };
 
 const renderTradePage = () => {
-    tradePage.innerHTML = `<div class="card-grid"></div>`;
-    const container = tradePage.querySelector('.card-grid');
+    tradePage.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>`;
+    const container = tradePage.querySelector('div');
     const sortedStocks = Object.values(stockData).filter(s => s && s.name).sort((a, b) => a.name.localeCompare(b.name));
+    container.innerHTML = '';
     sortedStocks.forEach(stock => {
         const card = document.createElement('div');
-        card.className = 'stock-card';
+        card.className = 'bg-gray-800 p-4 rounded-lg shadow-lg cursor-pointer transition transform hover:-translate-y-1 hover:shadow-blue-500/20';
         card.innerHTML = `
-            <div class="card-header">
-                <h3>${stock.name}</h3>
-                <span class="ticker-badge">${stock.ticker || stock.id}</span>
+            <div class="flex justify-between items-baseline">
+                <h3 class="text-lg font-bold text-white">${stock.name}</h3>
+                <span class="text-xs font-mono bg-gray-700 px-2 py-1 rounded">${stock.ticker || stock.id}</span>
             </div>
-            <p class="sector">${stock.sector}</p>
-            <p class="price">$${stock.price.toFixed(2)}</p>
+            <p class="text-sm text-gray-400 mb-2">${stock.sector}</p>
+            <p class="text-2xl font-light text-white">$${stock.price.toFixed(2)}</p>
         `;
         card.addEventListener('click', () => renderStockDetailPage(stock.ticker || stock.id));
         container.appendChild(card);
@@ -406,29 +403,30 @@ const renderDashboardPage = () => {
     const marketContainer = dashboardPage.querySelector('#dashboardMarketContainer') || document.createElement('div');
     if (!dashboardPage.querySelector('#dashboardMarketContainer')) {
         const title = document.createElement('h3');
+        title.className = 'text-xl font-bold text-white mb-4 mt-8';
         title.textContent = 'Market Overview';
         dashboardPage.appendChild(title);
         marketContainer.id = 'dashboardMarketContainer';
-        marketContainer.className = "card-grid";
+        marketContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5";
         dashboardPage.appendChild(marketContainer);
     }
     
     marketContainer.innerHTML = '';
     const sortedStocks = Object.values(stockData).filter(s => s && s.name).sort((a, b) => a.name.localeCompare(b.name));
     if (sortedStocks.length === 0) {
-        marketContainer.innerHTML = `<p>Market data is loading...</p>`;
+        marketContainer.innerHTML = `<p class="text-gray-400">Market data is loading...</p>`;
         return;
     }
     sortedStocks.forEach(stock => {
         const card = document.createElement('div');
-        card.className = 'stock-card';
+        card.className = 'bg-gray-800 p-4 rounded-lg shadow-lg cursor-pointer transition transform hover:-translate-y-1 hover:shadow-blue-500/20';
         card.innerHTML = `
-            <div class="card-header">
-                <h3>${stock.name}</h3>
-                <span class="ticker-badge">${stock.ticker || stock.id}</span>
+            <div class="flex justify-between items-baseline">
+                <h3 class="text-lg font-bold text-white">${stock.name}</h3>
+                <span class="text-xs font-mono bg-gray-700 px-2 py-1 rounded">${stock.ticker || stock.id}</span>
             </div>
-            <p class="sector">${stock.sector}</p>
-            <p class="price">$${stock.price.toFixed(2)}</p>
+            <p class="text-sm text-gray-400 mb-2">${stock.sector}</p>
+            <p class="text-2xl font-light text-white">$${stock.price.toFixed(2)}</p>
         `;
         card.addEventListener('click', () => renderStockDetailPage(stock.ticker || stock.id));
         marketContainer.appendChild(card);
@@ -436,21 +434,24 @@ const renderDashboardPage = () => {
 };
 
 const renderOrdersPage = () => {
-    ordersPage.innerHTML = `<div class="section"><h2>Pending Orders</h2><div id="pendingOrdersList"></div></div>`;
+    ordersPage.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold text-white mb-4">Pending Orders</h2>
+                                <div id="pendingOrdersList" class="space-y-3"></div>
+                            </div>`;
     const pendingList = ordersPage.querySelector('#pendingOrdersList');
     if (pendingOrders.length === 0) {
-        pendingList.innerHTML = `<p>You have no pending orders.</p>`;
+        pendingList.innerHTML = `<p class="text-gray-400">You have no pending orders.</p>`;
     } else {
         pendingList.innerHTML = '';
         pendingOrders.forEach(order => {
             const div = document.createElement('div');
-            div.className = 'order-card';
+            div.className = 'bg-gray-700 p-4 rounded-lg flex justify-between items-center';
             div.innerHTML = `
                 <div>
-                    <p style="font-weight: 700;">${order.type.replace('-', ' ').toUpperCase()} ${order.ticker}</p>
-                    <p style="color: var(--text-muted);">${order.quantity} shares @ $${order.limitPrice.toFixed(2)}</p>
+                    <p class="font-bold text-white">${order.type.replace('-', ' ').toUpperCase()} ${order.ticker}</p>
+                    <p class="text-sm text-gray-400">${order.quantity} shares @ $${order.limitPrice.toFixed(2)}</p>
                 </div>
-                <button data-id="${order.id}" class="cancel-order-btn danger">Cancel</button>
+                <button data-id="${order.id}" class="cancel-order-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded">Cancel</button>
             `;
             pendingList.appendChild(div);
         });
@@ -470,31 +471,37 @@ window.renderStockDetailPage = (ticker) => {
     if (!stock) return;
     pageTitle.textContent = `${stock.name} (${ticker})`;
     stockDetailPage.innerHTML = `
-        <div class="section" style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
-            <div><canvas id="stockChart"></canvas></div>
-            <div class="order-form">
-                <h3>Place an Order</h3>
-                <form id="tradeForm">
-                    <h4>Market Order</h4>
-                    <input type="number" id="marketQty" placeholder="Quantity">
-                    <div style="display: flex; gap: 8px;">
-                        <button type="button" id="marketBuyBtn" class="success" style="flex: 1;">Buy</button>
-                        <button type="button" id="marketSellBtn" class="danger" style="flex: 1;">Sell</button>
-                    </div>
-                    <hr style="border-color: var(--input-bg);">
-                    <h4>Limit Order</h4>
-                    <input type="number" id="limitQty" placeholder="Quantity">
-                    <input type="number" id="limitPrice" placeholder="Price">
-                    <div style="display: flex; gap: 8px;">
-                        <button type="button" id="limitBuyBtn" class="success" style="flex: 1;">Limit Buy</button>
-                        <button type="button" id="limitSellBtn" class="danger" style="flex: 1;">Limit Sell</button>
-                    </div>
-                    <hr style="border-color: var(--input-bg);">
-                    <h4>Stop Loss</h4>
-                    <input type="number" id="stopQty" placeholder="Quantity">
-                    <input type="number" id="stopPrice" placeholder="Trigger Price">
-                    <button type="button" id="stopSellBtn" class="warning" style="width: 100%;">Set Stop Loss</button>
-                </form>
+        <div class="bg-gray-800 p-6 rounded-lg shadow-xl">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 bg-gray-900 p-4 rounded-lg h-96"><canvas id="stockChart"></canvas></div>
+                <div class="bg-gray-900 p-6 rounded-lg">
+                    <h3 class="text-xl font-bold mb-4 text-white">Place an Order</h3>
+                    <form id="tradeForm" class="space-y-4">
+                        <div>
+                            <h4 class="font-semibold mb-2">Market Order</h4>
+                            <input type="number" id="marketQty" placeholder="Quantity" class="w-full bg-gray-700 p-2 rounded">
+                            <div class="flex space-x-2 mt-2">
+                                <button type="button" id="marketBuyBtn" class="flex-1 bg-green-600 p-2 rounded">Buy</button>
+                                <button type="button" id="marketSellBtn" class="flex-1 bg-red-600 p-2 rounded">Sell</button>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold mb-2">Limit Order</h4>
+                            <input type="number" id="limitQty" placeholder="Quantity" class="w-full bg-gray-700 p-2 rounded mb-2">
+                            <input type="number" id="limitPrice" placeholder="Price" class="w-full bg-gray-700 p-2 rounded">
+                            <div class="flex space-x-2 mt-2">
+                                <button type="button" id="limitBuyBtn" class="flex-1 bg-green-600 p-2 rounded">Limit Buy</button>
+                                <button type="button" id="limitSellBtn" class="flex-1 bg-red-600 p-2 rounded">Limit Sell</button>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold mb-2">Stop Loss</h4>
+                            <input type="number" id="stopQty" placeholder="Quantity" class="w-full bg-gray-700 p-2 rounded mb-2">
+                            <input type="number" id="stopPrice" placeholder="Trigger Price" class="w-full bg-gray-700 p-2 rounded">
+                            <button type="button" id="stopSellBtn" class="w-full mt-2 bg-orange-600 p-2 rounded">Set Stop Loss</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>`;
     drawStockChart(stock);
@@ -559,7 +566,7 @@ const drawStockChart = (stock) => {
             datasets: [{
                 label: 'Price History',
                 data: stock.history,
-                borderColor: 'var(--text-accent)',
+                borderColor: '#3b82f6',
                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
                 fill: true,
                 tension: 0.2,
@@ -571,8 +578,8 @@ const drawStockChart = (stock) => {
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                x: { ticks: { color: 'var(--text-muted)' }, grid: { color: 'rgba(255,255,255,0.1)' } },
-                y: { ticks: { color: 'var(--text-muted)' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.1)' } }
             }
         }
     });
