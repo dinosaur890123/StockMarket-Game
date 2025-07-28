@@ -72,7 +72,16 @@
             </header>
 
             <!-- Page Containers -->
-            <main id="dashboardPage" class="hidden"></main>
+            <main id="dashboardPage" class="hidden">
+                 <!-- News Feed Container -->
+                <div class="mb-8">
+                    <h3 class="text-xl font-bold text-white mb-4">Live News Feed</h3>
+                    <div id="newsFeedContainer" class="space-y-3 max-h-48 overflow-y-auto bg-gray-800 p-4 rounded-lg">
+                        <!-- News items will be injected here -->
+                        <p class="text-gray-400">Loading news...</p>
+                    </div>
+                </div>
+            </main>
             <main id="tradePage"></main>
             <main id="ordersPage" class="hidden"></main>
             <main id="stockDetailPage" class="hidden"></main>

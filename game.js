@@ -1,7 +1,7 @@
 // Firebase Imports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs, addDoc, serverTimestamp, where, updateDoc, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs, addDoc, serverTimestamp, where, updateDoc, getDoc, runTransaction, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -33,6 +33,7 @@ const dashboardPage = document.getElementById('dashboardPage');
 const tradePage = document.getElementById('tradePage');
 const ordersPage = document.getElementById('ordersPage');
 const stockDetailPage = document.getElementById('stockDetailPage');
+const newsFeedContainer = document.getElementById('newsFeedContainer');
 const navLinks = {
     dashboard: document.getElementById('navDashboard'),
     trade: document.getElementById('navTrade'),
@@ -47,9 +48,11 @@ let currentUserId = null;
 let userPortfolio = null;
 let stockData = {};
 let pendingOrders = [];
+let activeNews = [];
 let stockUnsubscribe = null;
 let portfolioUnsubscribe = null;
 let ordersUnsubscribe = null;
+let newsUnsubscribe = null;
 let activeChart = null;
 let marketState = null;
 let marketStateUnsubscribe = null;
@@ -80,9 +83,8 @@ Object.keys(navLinks).forEach(key => {
 
 // --- Authentication ---
 onAuthStateChanged(auth, user => {
-    [stockUnsubscribe, portfolioUnsubscribe, ordersUnsubscribe, marketStateUnsubscribe].forEach(unsub => { if (unsub) unsub(); });
+    [stockUnsubscribe, portfolioUnsubscribe, ordersUnsubscribe, marketStateUnsubscribe, newsUnsubscribe].forEach(unsub => { if (unsub) unsub(); });
     if (marketUpdateInterval) clearInterval(marketUpdateInterval);
-
 
     if (user) {
         currentUserId = user.uid;
@@ -104,27 +106,23 @@ onAuthStateChanged(auth, user => {
 });
 mainSignInButton.addEventListener('click', () => signInWithPopup(auth, provider));
 
-// --- Core Game Logic & Market Simulation (Corrected Paths) ---
+// --- Core Game Logic & Market Simulation ---
 const initializeMarketInFirestore = async () => {
     const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
     const stocksCollectionRef = collection(db, `artifacts/${appId}/public/market/stocks`);
 
-    // Initialize market state if it doesn't exist
     const marketStateSnap = await getDoc(marketDocRef);
     if (!marketStateSnap.exists()) {
-        console.log("Market document not found. Initializing with default state.");
         await setDoc(marketDocRef, {
             is_running: true,
-            tick_interval_seconds: 5,
+            tick_interval_seconds: 15, // Slower default for news
             last_update: serverTimestamp()
         });
     }
 
-    // Initialize companies if they don't exist
     const q = query(stocksCollectionRef);
     const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) {
-        console.log("No companies found. Initializing market with default stocks.");
         const initialCompanies = [
             { ticker: 'INNV', name: 'Innovate Corp', sector: 'Tech', price: 150.00, volatility: 1.5 },
             { ticker: 'HLTH', name: 'Healthwell Inc.', sector: 'Healthcare', price: 220.00, volatility: 0.8 },
@@ -145,6 +143,7 @@ const loadGameData = async (userId) => {
     subscribeToPortfolio(userId);
     subscribeToOrders(userId);
     subscribeToMarketState();
+    subscribeToNews();
 };
 
 const subscribeToMarketState = () => {
@@ -160,7 +159,7 @@ const subscribeToMarketState = () => {
 const setupMarketUpdateLoop = () => {
     if (marketUpdateInterval) clearInterval(marketUpdateInterval);
     if (marketState && marketState.is_running) {
-        marketUpdateInterval = setInterval(tryToUpdateMarket, 1000); // Check every second
+        marketUpdateInterval = setInterval(tryToUpdateMarket, 1000);
     }
 };
 
@@ -171,10 +170,9 @@ const tryToUpdateMarket = async () => {
     const lastUpdate = marketState.last_update.seconds;
     const interval = marketState.tick_interval_seconds;
 
-    if ((now - lastUpdate) < interval) return; // Not time yet
+    if ((now - lastUpdate) < interval) return;
 
     const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
-    let iAmTheUpdater = false;
     try {
         await runTransaction(db, async (transaction) => {
             const stateDoc = await transaction.get(marketDocRef);
@@ -186,16 +184,11 @@ const tryToUpdateMarket = async () => {
 
             if ((currentNow - currentLastUpdate) >= currentState.tick_interval_seconds) {
                 transaction.update(marketDocRef, { last_update: serverTimestamp() });
-                iAmTheUpdater = true;
+                await updateMarketPrices();
             }
         });
-
-        if (iAmTheUpdater) {
-            console.log(`Client ${currentUserId} is updating the market.`);
-            await updateMarketPrices();
-        }
     } catch (e) {
-        console.log("Market update race failed (another client likely won):", e);
+        console.log("Market update race failed:", e);
     }
 };
 
@@ -208,8 +201,18 @@ const updateMarketPrices = async () => {
     querySnapshot.forEach(docSnap => {
         const stock = docSnap.data();
         const stockRef = doc(stocksCollectionRef, docSnap.id);
-        const volatility = stock.volatility || 1.0;
-        const changePercent = 2 * volatility * (Math.random() - 0.5);
+        
+        let changePercent = 2 * stock.volatility * (Math.random() - 0.5);
+
+        // Check for active news impacting this stock
+        const newsEvent = activeNews.find(n => n.ticker === docSnap.id && n.is_active);
+        if (newsEvent) {
+            // Apply a much stronger, directed impact from the news
+            changePercent += newsEvent.impact_percent;
+            // You might want to 'consume' the news event after a few ticks
+            // For now, it applies as long as is_active is true
+        }
+
         let newPrice = stock.price * (1 + changePercent / 100);
         newPrice = Math.max(0.01, newPrice);
 
@@ -221,9 +224,34 @@ const updateMarketPrices = async () => {
     });
 
     await batch.commit();
-    console.log("Market prices successfully updated by this client.");
+    console.log("Market prices updated.");
 };
 
+const subscribeToNews = () => {
+    const newsRef = collection(db, `artifacts/${appId}/public/market/news`);
+    const q = query(newsRef, orderBy("timestamp", "desc"), limit(10));
+    newsUnsubscribe = onSnapshot(q, (snapshot) => {
+        activeNews = snapshot.docs.map(doc => doc.data());
+        renderNewsFeed();
+    });
+};
+
+const renderNewsFeed = () => {
+    if (!newsFeedContainer) return;
+    newsFeedContainer.innerHTML = '';
+    if (activeNews.length === 0) {
+        newsFeedContainer.innerHTML = '<p class="text-gray-400">No recent news.</p>';
+        return;
+    }
+    activeNews.forEach(news => {
+        const div = document.createElement('div');
+        div.className = 'border-l-4 p-2';
+        const sentimentColor = news.sentiment > 0 ? 'border-green-500' : 'border-red-500';
+        div.classList.add(sentimentColor);
+        div.innerHTML = `<p class="text-sm text-gray-300">${news.headline}</p><p class="text-xs text-gray-500">${new Date(news.timestamp.seconds * 1000).toLocaleTimeString()}</p>`;
+        newsFeedContainer.appendChild(div);
+    });
+};
 
 const subscribeToStocks = () => {
     const stocksRef = collection(db, `artifacts/${appId}/public/market/stocks`);
@@ -233,7 +261,7 @@ const subscribeToStocks = () => {
             stockData[stock.id] = stock;
             if (change.type === "modified") {
                  if (document.getElementById('stockDetailPage').classList.contains('hidden') === false && pageTitle.textContent.includes(stock.ticker)) {
-                    renderStockDetailPage(stock.id); // Re-render detail page if it's open
+                    renderStockDetailPage(stock.id);
                 }
                 checkPendingOrders(stock);
             }
@@ -328,21 +356,30 @@ const renderTradePage = () => {
 };
 
 const renderDashboardPage = () => {
-    dashboardPage.innerHTML = `<h3 class="text-xl font-bold text-white mb-4">Market Overview</h3><div id="dashboardMarketContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>`;
-    const container = dashboardPage.querySelector('#dashboardMarketContainer');
-    if (!container) return;
+    // This function is now simpler as the news feed is always visible in the dashboard container
+    const marketContainer = dashboardPage.querySelector('#dashboardMarketContainer') || document.createElement('div');
+    if (!dashboardPage.querySelector('#dashboardMarketContainer')) {
+        const title = document.createElement('h3');
+        title.className = 'text-xl font-bold text-white mb-4 mt-8';
+        title.textContent = 'Market Overview';
+        dashboardPage.appendChild(title);
+        marketContainer.id = 'dashboardMarketContainer';
+        marketContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5";
+        dashboardPage.appendChild(marketContainer);
+    }
+    
+    marketContainer.innerHTML = '';
     const sortedStocks = Object.values(stockData).filter(s => s && s.ticker).sort((a, b) => a.ticker.localeCompare(b.ticker));
     if (sortedStocks.length === 0) {
-        container.innerHTML = `<p class="text-gray-400">Market data is loading...</p>`;
+        marketContainer.innerHTML = `<p class="text-gray-400">Market data is loading...</p>`;
         return;
     }
-    container.innerHTML = '';
     sortedStocks.forEach(stock => {
         const card = document.createElement('div');
         card.className = 'bg-gray-800 p-4 rounded-lg shadow-lg cursor-pointer transition transform hover:-translate-y-1 hover:shadow-blue-500/20';
         card.innerHTML = `<div class="flex justify-between items-baseline"><h3 class="text-lg font-bold text-white">${stock.name}</h3><span class="text-xs font-mono bg-gray-700 px-2 py-1 rounded">${stock.ticker}</span></div><p class="text-sm text-gray-400 mb-2">${stock.sector}</p><p class="text-2xl font-light text-white">$${stock.price.toFixed(2)}</p>`;
         card.addEventListener('click', () => renderStockDetailPage(stock.id));
-        container.appendChild(card);
+        marketContainer.appendChild(card);
     });
 };
 
