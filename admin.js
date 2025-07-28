@@ -35,17 +35,13 @@ const formTitle = document.getElementById('formTitle');
 const tickerInput = document.getElementById('ticker');
 const adminMessageBox = document.getElementById('adminMessageBox');
 const adminMessageText = document.getElementById('adminMessageText');
-// Market Controls
 const toggleMarketBtn = document.getElementById('toggleMarketBtn');
 const marketStatus = document.getElementById('marketStatus');
 const tickIntervalInput = document.getElementById('tickInterval');
 const setTickIntervalBtn = document.getElementById('setTickIntervalBtn');
-// Manual News
 const manualNewsForm = document.getElementById('manualNewsForm');
 const newsTickerSelect = document.getElementById('newsTicker');
-// Player Management
 const playerList = document.getElementById('playerList');
-
 
 // --- State ---
 let isEditing = false;
@@ -54,37 +50,42 @@ let marketState = null;
 
 // --- Authentication ---
 onAuthStateChanged(auth, user => {
-    if (loginPrompt) loginPrompt.classList.add('hidden');
+    loginPrompt.classList.add('hidden');
     if (user) {
         if (user.uid === ADMIN_UID) {
             adminContent.classList.remove('hidden');
             unauthorizedMessage.classList.add('hidden');
-            authContainer.innerHTML = `<div class="flex items-center space-x-4"><p class="text-sm text-yellow-300">Admin: ${user.displayName}</p><button id="signOutButton" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></div>`;
+            authContainer.innerHTML = `
+                <div class="auth-info">
+                    <p>Admin: ${user.displayName}</p>
+                    <button id="signOutButton" class="danger">Sign Out</button>
+                </div>`;
             document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
-            // Load admin-only data
             loadPlayerData();
         } else {
             adminContent.classList.add('hidden');
             unauthorizedMessage.classList.remove('hidden');
-            authContainer.innerHTML = `<div class="flex items-center space-x-4"><p class="text-sm text-red-500">Not an admin: ${user.displayName}</p><button id="signOutButton" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></div>`;
+            authContainer.innerHTML = `
+                <div class="auth-info">
+                    <p>Not an admin: ${user.displayName}</p>
+                    <button id="signOutButton" class="danger">Sign Out</button>
+                </div>`;
             document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
         }
     } else {
         adminContent.classList.add('hidden');
         unauthorizedMessage.classList.add('hidden');
         loginPrompt.classList.remove('hidden');
-        authContainer.innerHTML = `<button id="signInButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Sign In as Admin</button>`;
-        const signInBtn = document.getElementById('signInButton');
-        if (signInBtn) signInBtn.addEventListener('click', () => signInWithPopup(auth, provider));
+        authContainer.innerHTML = `<button id="signInButton" class="primary">Sign In as Admin</button>`;
+        document.getElementById('signInButton').addEventListener('click', () => signInWithPopup(auth, provider));
     }
 });
 
 // --- UI Helpers ---
 const showAdminMessage = (text, isError = false) => {
     adminMessageText.textContent = text;
+    adminMessageBox.className = isError ? 'error' : 'success';
     adminMessageBox.classList.remove('hidden');
-    adminMessageBox.classList.toggle('bg-red-500', isError);
-    adminMessageBox.classList.toggle('bg-green-500', !isError);
     setTimeout(() => adminMessageBox.classList.add('hidden'), 3000);
 };
 
@@ -96,11 +97,11 @@ onSnapshot(marketDocRef, (docSnap) => {
         tickIntervalInput.value = marketState.tick_interval_seconds;
         if (marketState.is_running) {
             marketStatus.textContent = 'Running';
-            marketStatus.className = 'font-semibold text-green-500';
+            marketStatus.style.color = 'var(--green)';
             toggleMarketBtn.textContent = 'Pause Market';
         } else {
             marketStatus.textContent = 'Paused';
-            marketStatus.className = 'font-semibold text-red-500';
+            marketStatus.style.color = 'var(--red)';
             toggleMarketBtn.textContent = 'Resume Market';
         }
     }
@@ -124,22 +125,12 @@ manualNewsForm.addEventListener('submit', async (e) => {
     const headline = manualNewsForm.newsHeadline.value;
     const ticker = manualNewsForm.newsTicker.value;
     const impact = parseFloat(manualNewsForm.newsImpact.value);
-
-    if (!headline || !ticker || isNaN(impact)) {
-        return showAdminMessage("Please fill all news fields.", true);
-    }
-
+    if (!headline || !ticker || isNaN(impact)) return showAdminMessage("Please fill all news fields.", true);
     const newsRef = collection(db, `artifacts/${appId}/public/market/news`);
     await addDoc(newsRef, {
-        headline,
-        ticker,
-        impact_percent: impact,
-        sentiment: Math.sign(impact),
-        timestamp: serverTimestamp(),
-        is_active: true,
-        source: 'manual'
+        headline, ticker, impact_percent: impact, sentiment: Math.sign(impact),
+        timestamp: serverTimestamp(), is_active: true, source: 'manual'
     });
-
     showAdminMessage("Manual news event broadcasted!");
     manualNewsForm.reset();
 });
@@ -160,17 +151,16 @@ async function loadPlayerData() {
         renderPlayerList(players);
     } catch (error) {
         console.error("Error loading player data:", error);
-        playerList.innerHTML = `<p class="text-red-400">Could not load player data. Check Firestore rules.</p>`;
+        playerList.innerHTML = `<p style="color: var(--red);">Could not load player data. Check Firestore rules.</p>`;
     }
 }
 
 function renderPlayerList(players) {
     playerList.innerHTML = '';
     if (players.length === 0) {
-        playerList.innerHTML = '<p class="text-gray-400">No players found.</p>';
+        playerList.innerHTML = '<p>No players found.</p>';
         return;
     }
-
     players.forEach(player => {
         const portfolio = player.portfolio;
         let stockValue = 0;
@@ -180,20 +170,17 @@ function renderPlayerList(players) {
             }, 0);
         }
         const netWorth = portfolio.cash + stockValue;
-
         const playerCard = document.createElement('div');
-        playerCard.className = 'bg-gray-700 p-4 rounded-lg';
+        playerCard.className = 'player-card';
         playerCard.innerHTML = `
-            <p class="text-sm font-mono text-gray-400 truncate" title="${player.id}">${player.id}</p>
-            <div class="flex justify-between items-center mt-2">
-                <div>
-                    <p class="text-lg font-bold text-white">Net Worth: $${netWorth.toFixed(2)}</p>
-                    <p class="text-sm text-green-400">Cash: $${portfolio.cash.toFixed(2)}</p>
-                </div>
-                <div class="flex space-x-2">
-                    <button data-id="${player.id}" class="add-cash-btn bg-green-600 hover:bg-green-700 p-2 rounded text-xs">Award Cash</button>
-                    <button data-id="${player.id}" class="reset-btn bg-red-600 hover:bg-red-700 p-2 rounded text-xs">Reset</button>
-                </div>
+            <div>
+                <p title="${player.id}" style="font-family: monospace; font-size: 0.8rem;">${player.id.substring(0, 12)}...</p>
+                <p style="font-weight: 700;">Net Worth: $${netWorth.toFixed(2)}</p>
+                <p style="color: var(--green);">Cash: $${portfolio.cash.toFixed(2)}</p>
+            </div>
+            <div class="button-group">
+                <button data-id="${player.id}" class="add-cash-btn success">Award Cash</button>
+                <button data-id="${player.id}" class="reset-btn danger">Reset</button>
             </div>
         `;
         playerList.appendChild(playerCard);
@@ -203,35 +190,26 @@ function renderPlayerList(players) {
 playerList.addEventListener('click', async (e) => {
     const userId = e.target.dataset.id;
     if (!userId) return;
-
     const portfolioRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio/main`);
-
     if (e.target.classList.contains('add-cash-btn')) {
         const amountStr = prompt(`Enter amount of cash to award to user ${userId}:`);
         const amount = parseFloat(amountStr);
         if (!isNaN(amount) && amount > 0) {
-            await updateDoc(portfolioRef, {
-                cash: increment(amount)
-            });
+            await updateDoc(portfolioRef, { cash: increment(amount) });
             showAdminMessage(`Awarded $${amount} to user.`);
-            loadPlayerData(); // Refresh list
+            loadPlayerData();
         } else {
             showAdminMessage("Invalid amount.", true);
         }
     }
-
     if (e.target.classList.contains('reset-btn')) {
-        if (confirm(`Are you sure you want to reset user ${userId}'s account? This is irreversible.`)) {
-            await setDoc(portfolioRef, {
-                cash: 20000,
-                stocks: {}
-            });
+        if (confirm(`Are you sure you want to reset user ${userId}'s account?`)) {
+            await setDoc(portfolioRef, { cash: 20000, stocks: {} });
             showAdminMessage(`User ${userId} has been reset.`);
-            loadPlayerData(); // Refresh list
+            loadPlayerData();
         }
     }
 });
-
 
 // --- Company Management ---
 const stocksCollectionRef = collection(db, `artifacts/${appId}/public/market/stocks`);
@@ -247,47 +225,52 @@ onSnapshot(stocksCollectionRef, (snapshot) => {
     });
     currentCompanies = companies;
     renderCompanyList(companies);
-    if (auth.currentUser?.uid === ADMIN_UID) loadPlayerData(); // Refresh player net worths when prices change
+    if (auth.currentUser?.uid === ADMIN_UID) loadPlayerData();
 }, (error) => {
     console.error("Firestore read error:", error);
     showAdminMessage("Could not load company data.", true);
 });
 
 function renderCompanyList(companies) {
-    const companyListEl = document.getElementById('companyList');
-    companyListEl.innerHTML = '';
+    companyList.innerHTML = '';
     if (Object.keys(companies).length === 0) {
-        companyListEl.innerHTML = '<p class="text-gray-400">No companies found.</p>';
+        companyList.innerHTML = '<p>No companies found.</p>';
         return;
     }
     Object.keys(companies).sort().forEach(ticker => {
         const company = companies[ticker];
         const div = document.createElement('div');
-        div.className = 'bg-gray-700 p-4 rounded-lg flex justify-between items-center';
-        div.innerHTML = `<div><p class="font-bold text-lg text-white">${company.name} (${ticker})</p><p class="text-sm text-gray-400">Sector: ${company.sector} | Price: $${company.price.toFixed(2)} | Vol: ${company.volatility}</p></div><div class="space-x-2"><button data-ticker="${ticker}" class="edit-btn bg-yellow-500 p-2 rounded">Edit</button><button data-ticker="${ticker}" class="delete-btn bg-red-600 p-2 rounded">Delete</button></div>`;
-        companyListEl.appendChild(div);
+        div.className = 'company-card';
+        div.innerHTML = `
+            <div>
+                <p style="font-weight: 700;">${company.name} (${ticker})</p>
+                <p style="color: var(--text-muted);">Sector: ${company.sector} | Price: $${company.price.toFixed(2)} | Vol: ${company.volatility}</p>
+            </div>
+            <div class="button-group">
+                <button data-ticker="${ticker}" class="edit-btn warning">Edit</button>
+                <button data-ticker="${ticker}" class="delete-btn danger">Delete</button>
+            </div>
+        `;
+        companyList.appendChild(div);
     });
 }
 
 companyList.addEventListener('click', async (e) => {
     const ticker = e.target.dataset.ticker;
     if (!ticker) return;
-    
     const stockRef = doc(db, `artifacts/${appId}/public/market/stocks`, ticker);
-
     if (e.target.classList.contains('delete-btn')) {
         if (confirm(`Are you sure you want to delete ${ticker}?`)) {
             await deleteDoc(stockRef);
             showAdminMessage(`${ticker} deleted.`);
         }
     }
-    
     if (e.target.classList.contains('edit-btn')) {
         const company = currentCompanies[ticker];
         if (company) {
             formTitle.textContent = `Editing ${ticker}`;
-            document.getElementById('ticker').value = ticker;
-            document.getElementById('ticker').disabled = true;
+            tickerInput.value = ticker;
+            tickerInput.disabled = true;
             document.getElementById('name').value = company.name;
             document.getElementById('sector').value = company.sector;
             document.getElementById('price').value = company.price;
@@ -301,23 +284,19 @@ companyList.addEventListener('click', async (e) => {
 
 companyForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const ticker = document.getElementById('ticker').value.toUpperCase();
+    const ticker = tickerInput.value.toUpperCase();
     const name = document.getElementById('name').value;
     const sector = document.getElementById('sector').value;
     const price = parseFloat(document.getElementById('price').value);
     const volatility = parseFloat(document.getElementById('volatility').value);
     if (!ticker || !name || !sector || isNaN(price) || isNaN(volatility)) return showAdminMessage("Please fill out all fields.", true);
-    
     const stockRef = doc(db, `artifacts/${appId}/public/market/stocks`, ticker);
-    
     let companyData;
     if (isEditing) {
-        const existingData = currentCompanies[ticker];
-        companyData = { ...existingData, name, sector, price, volatility };
+        companyData = { ...currentCompanies[ticker], name, sector, price, volatility };
     } else {
         companyData = { name, sector, price, volatility, history: [price] };
     }
-    
     await setDoc(stockRef, companyData, { merge: true });
     showAdminMessage(`Company ${ticker} saved!`);
     clearForm();
@@ -325,7 +304,7 @@ companyForm.addEventListener('submit', async (e) => {
 
 function clearForm() {
     companyForm.reset();
-    document.getElementById('ticker').disabled = false;
+    tickerInput.disabled = false;
     document.getElementById('submitButton').textContent = 'Add Company';
     isEditing = false;
 };

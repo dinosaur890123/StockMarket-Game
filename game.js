@@ -33,11 +33,13 @@ const dashboardPage = document.getElementById('dashboardPage');
 const tradePage = document.getElementById('tradePage');
 const ordersPage = document.getElementById('ordersPage');
 const stockDetailPage = document.getElementById('stockDetailPage');
+const leaderboardPage = document.getElementById('leaderboardPage');
 const newsFeedContainer = document.getElementById('newsFeedContainer');
 const navLinks = {
     dashboard: document.getElementById('navDashboard'),
     trade: document.getElementById('navTrade'),
     orders: document.getElementById('navOrders'),
+    leaderboard: document.getElementById('navLeaderboard'),
 };
 const headerCash = document.getElementById('headerCash');
 const headerStocks = document.getElementById('headerStocks');
@@ -53,6 +55,7 @@ let stockUnsubscribe = null;
 let portfolioUnsubscribe = null;
 let ordersUnsubscribe = null;
 let newsUnsubscribe = null;
+let leaderboardUnsubscribe = null;
 let activeChart = null;
 let marketState = null;
 let marketStateUnsubscribe = null;
@@ -60,18 +63,18 @@ let marketUpdateInterval = null;
 
 // --- Navigation ---
 const showPage = (pageId) => {
-    [dashboardPage, tradePage, ordersPage, stockDetailPage].forEach(p => p.classList.add('hidden'));
+    [dashboardPage, tradePage, ordersPage, stockDetailPage, leaderboardPage].forEach(p => p.classList.add('hidden'));
     const pageElement = document.getElementById(pageId);
     if (pageElement) pageElement.classList.remove('hidden');
 
     Object.values(navLinks).forEach(link => link.classList.remove('active'));
-    if (pageId.startsWith('dashboard')) navLinks.dashboard.classList.add('active');
-    if (pageId.startsWith('trade') || pageId.startsWith('stockDetail')) navLinks.trade.classList.add('active');
-    if (pageId.startsWith('orders')) navLinks.orders.classList.add('active');
-
+    const activeLink = document.getElementById(`nav${pageId.replace('Page', '')}`);
+    if(activeLink) activeLink.classList.add('active');
+    
     if (pageId === 'dashboardPage') pageTitle.textContent = 'Dashboard';
     if (pageId === 'tradePage') pageTitle.textContent = 'Trade';
     if (pageId === 'ordersPage') pageTitle.textContent = 'My Orders';
+    if (pageId === 'leaderboardPage') pageTitle.textContent = 'Leaderboard';
 };
 
 Object.keys(navLinks).forEach(key => {
@@ -83,7 +86,7 @@ Object.keys(navLinks).forEach(key => {
 
 // --- Authentication ---
 onAuthStateChanged(auth, user => {
-    [stockUnsubscribe, portfolioUnsubscribe, ordersUnsubscribe, marketStateUnsubscribe, newsUnsubscribe].forEach(unsub => { if (unsub) unsub(); });
+    [stockUnsubscribe, portfolioUnsubscribe, ordersUnsubscribe, marketStateUnsubscribe, newsUnsubscribe, leaderboardUnsubscribe].forEach(unsub => { if (unsub) unsub(); });
     if (marketUpdateInterval) clearInterval(marketUpdateInterval);
 
     if (user) {
@@ -91,8 +94,13 @@ onAuthStateChanged(auth, user => {
         sidebar.classList.remove('hidden');
         mainContent.classList.remove('hidden');
         loginPage.classList.add('hidden');
-        appContainer.style.marginLeft = '16rem';
-        authContainer.innerHTML = `<button id="signOutButton" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md">Sign Out</button>`;
+        appContainer.style.marginLeft = '256px';
+        authContainer.innerHTML = `
+            <div class="auth-info">
+                <img src="${user.photoURL || 'https://placehold.co/40x40/7f8c8d/ecf0f1?text=?'}" alt="User Photo">
+                <p>${user.displayName}</p>
+            </div>
+            <button id="signOutButton" class="danger">Sign Out</button>`;
         document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
         showPage('dashboardPage');
         loadGameData(user.uid);
@@ -102,24 +110,85 @@ onAuthStateChanged(auth, user => {
         mainContent.classList.add('hidden');
         loginPage.classList.remove('hidden');
         appContainer.style.marginLeft = '0';
+        authContainer.innerHTML = '';
     }
 });
 mainSignInButton.addEventListener('click', () => signInWithPopup(auth, provider));
 
-// --- Core Game Logic & Market Simulation ---
+// --- Core Game Logic ---
+const loadGameData = async (userId) => {
+    await initializeMarketInFirestore();
+    subscribeToStocks();
+    subscribeToPortfolio(userId);
+    subscribeToOrders(userId);
+    subscribeToMarketState();
+    subscribeToNews();
+    subscribeToLeaderboard();
+};
+
+const subscribeToLeaderboard = () => {
+    const leaderboardRef = doc(db, `artifacts/${appId}/public/market/leaderboard`);
+    leaderboardUnsubscribe = onSnapshot(leaderboardRef, (docSnap) => {
+        if (docSnap.exists()) {
+            renderLeaderboard(docSnap.data().players);
+        } else {
+            renderLeaderboard([]);
+        }
+    });
+};
+
+const renderLeaderboard = (players) => {
+    leaderboardPage.innerHTML = `
+        <div class="section">
+            <h2>Top Players by Net Worth</h2>
+            <div id="leaderboardList"></div>
+        </div>
+    `;
+    const listEl = leaderboardPage.querySelector('#leaderboardList');
+    if (!players || players.length === 0) {
+        listEl.innerHTML = '<p>Leaderboard is being calculated...</p>';
+        return;
+    }
+
+    players.forEach((player, index) => {
+        const rank = index + 1;
+        const playerCard = document.createElement('div');
+        playerCard.className = 'leaderboard-card';
+        
+        let rankClass = '';
+        if (rank === 1) rankClass = 'gold';
+        if (rank === 2) rankClass = 'silver';
+        if (rank === 3) rankClass = 'bronze';
+
+        playerCard.innerHTML = `
+            <div style="display: flex; align-items: center;">
+                <span class="rank ${rankClass}">${rank}</span>
+                <img src="${player.photoURL || 'https://placehold.co/40x40/7f8c8d/ecf0f1?text=?'}" alt="Player photo">
+                <div>
+                    <p style="font-weight: 700;">${player.displayName || 'Anonymous Player'}</p>
+                    <p style="color: var(--text-muted);">Net Worth: $${player.netWorth.toFixed(2)}</p>
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <p style="color: var(--green);">Cash: $${player.cash.toFixed(2)}</p>
+                <p style="color: var(--text-accent);">Stocks: $${player.stockValue.toFixed(2)}</p>
+            </div>
+        `;
+        listEl.appendChild(playerCard);
+    });
+};
+
 const initializeMarketInFirestore = async () => {
     const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
     const stocksCollectionRef = collection(db, `artifacts/${appId}/public/market/stocks`);
-
     const marketStateSnap = await getDoc(marketDocRef);
     if (!marketStateSnap.exists()) {
         await setDoc(marketDocRef, {
             is_running: true,
-            tick_interval_seconds: 15, // Slower default for news
+            tick_interval_seconds: 15,
             last_update: serverTimestamp()
         });
     }
-
     const q = query(stocksCollectionRef);
     const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) {
@@ -135,15 +204,6 @@ const initializeMarketInFirestore = async () => {
         });
         await batch.commit();
     }
-};
-
-const loadGameData = async (userId) => {
-    await initializeMarketInFirestore();
-    subscribeToStocks();
-    subscribeToPortfolio(userId);
-    subscribeToOrders(userId);
-    subscribeToMarketState();
-    subscribeToNews();
 };
 
 const subscribeToMarketState = () => {
@@ -165,23 +225,18 @@ const setupMarketUpdateLoop = () => {
 
 const tryToUpdateMarket = async () => {
     if (!marketState || !marketState.is_running || !marketState.last_update) return;
-
     const now = Math.floor(Date.now() / 1000);
     const lastUpdate = marketState.last_update.seconds;
     const interval = marketState.tick_interval_seconds;
-
     if ((now - lastUpdate) < interval) return;
-
     const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
     try {
         await runTransaction(db, async (transaction) => {
             const stateDoc = await transaction.get(marketDocRef);
             if (!stateDoc.exists()) throw "Market document does not exist!";
-            
             const currentState = stateDoc.data();
             const currentNow = Math.floor(Date.now() / 1000);
             const currentLastUpdate = currentState.last_update.seconds;
-
             if ((currentNow - currentLastUpdate) >= currentState.tick_interval_seconds) {
                 transaction.update(marketDocRef, { last_update: serverTimestamp() });
                 await updateMarketPrices();
@@ -196,35 +251,23 @@ const updateMarketPrices = async () => {
     const stocksCollectionRef = collection(db, `artifacts/${appId}/public/market/stocks`);
     const querySnapshot = await getDocs(stocksCollectionRef);
     if (querySnapshot.empty) return;
-
     const batch = writeBatch(db);
     querySnapshot.forEach(docSnap => {
         const stock = docSnap.data();
         const stockRef = doc(stocksCollectionRef, docSnap.id);
-        
         let changePercent = 2 * stock.volatility * (Math.random() - 0.5);
-
-        // Check for active news impacting this stock
         const newsEvent = activeNews.find(n => n.ticker === docSnap.id && n.is_active);
         if (newsEvent) {
-            // Apply a much stronger, directed impact from the news
             changePercent += newsEvent.impact_percent;
-            // You might want to 'consume' the news event after a few ticks
-            // For now, it applies as long as is_active is true
         }
-
         let newPrice = stock.price * (1 + changePercent / 100);
         newPrice = Math.max(0.01, newPrice);
-
         const history = stock.history || [];
         history.push(newPrice);
         if (history.length > 100) history.shift();
-
         batch.update(stockRef, { price: newPrice, history: history });
     });
-
     await batch.commit();
-    console.log("Market prices updated.");
 };
 
 const subscribeToNews = () => {
@@ -240,15 +283,14 @@ const renderNewsFeed = () => {
     if (!newsFeedContainer) return;
     newsFeedContainer.innerHTML = '';
     if (activeNews.length === 0) {
-        newsFeedContainer.innerHTML = '<p class="text-gray-400">No recent news.</p>';
+        newsFeedContainer.innerHTML = '<p>No recent news.</p>';
         return;
     }
     activeNews.forEach(news => {
         const div = document.createElement('div');
-        div.className = 'border-l-4 p-2';
-        const sentimentColor = news.sentiment > 0 ? 'border-green-500' : 'border-red-500';
-        div.classList.add(sentimentColor);
-        div.innerHTML = `<p class="text-sm text-gray-300">${news.headline}</p><p class="text-xs text-gray-500">${new Date(news.timestamp.seconds * 1000).toLocaleTimeString()}</p>`;
+        const sentimentClass = news.sentiment > 0 ? 'positive' : 'negative';
+        div.className = `news-item ${sentimentClass}`;
+        div.innerHTML = `<p>${news.headline}</p><p>${new Date(news.timestamp.seconds * 1000).toLocaleTimeString()}</p>`;
         newsFeedContainer.appendChild(div);
     });
 };
@@ -256,19 +298,22 @@ const renderNewsFeed = () => {
 const subscribeToStocks = () => {
     const stocksRef = collection(db, `artifacts/${appId}/public/market/stocks`);
     stockUnsubscribe = onSnapshot(stocksRef, snapshot => {
-        snapshot.docChanges().forEach(change => {
+        const stockChanges = snapshot.docChanges();
+        stockChanges.forEach(change => {
             const stock = { id: change.doc.id, ...change.doc.data() };
             stockData[stock.id] = stock;
             if (change.type === "modified") {
-                 if (document.getElementById('stockDetailPage').classList.contains('hidden') === false && pageTitle.textContent.includes(stock.ticker)) {
+                if (!stockDetailPage.classList.contains('hidden') && pageTitle.textContent.includes(stock.id)) {
                     renderStockDetailPage(stock.id);
                 }
                 checkPendingOrders(stock);
             }
         });
-        renderTradePage();
-        renderDashboardPage();
-        updatePortfolioValue();
+        if (stockChanges.length > 0) {
+            renderTradePage();
+            renderDashboardPage();
+            updatePortfolioValue();
+        }
     }, console.error);
 };
 
@@ -338,62 +383,75 @@ const updatePortfolioValue = () => {
 };
 
 const renderTradePage = () => {
-    const container = tradePage.querySelector('div') || document.createElement('div');
-    container.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5";
-    container.innerHTML = '';
-    
-    const sortedStocks = Object.values(stockData).filter(s => s && s.ticker).sort((a, b) => a.ticker.localeCompare(b.ticker));
+    tradePage.innerHTML = `<div class="card-grid"></div>`;
+    const container = tradePage.querySelector('.card-grid');
+    const sortedStocks = Object.values(stockData).filter(s => s && s.name).sort((a, b) => a.name.localeCompare(b.name));
     sortedStocks.forEach(stock => {
         const card = document.createElement('div');
-        card.className = 'bg-gray-800 p-4 rounded-lg shadow-lg cursor-pointer transition transform hover:-translate-y-1 hover:shadow-blue-500/20';
-        card.innerHTML = `<div class="flex justify-between items-baseline"><h3 class="text-lg font-bold text-white">${stock.name}</h3><span class="text-xs font-mono bg-gray-700 px-2 py-1 rounded">${stock.ticker}</span></div><p class="text-sm text-gray-400 mb-2">${stock.sector}</p><p class="text-2xl font-light text-white">$${stock.price.toFixed(2)}</p>`;
-        card.addEventListener('click', () => renderStockDetailPage(stock.id));
+        card.className = 'stock-card';
+        card.innerHTML = `
+            <div class="card-header">
+                <h3>${stock.name}</h3>
+                <span class="ticker-badge">${stock.ticker || stock.id}</span>
+            </div>
+            <p class="sector">${stock.sector}</p>
+            <p class="price">$${stock.price.toFixed(2)}</p>
+        `;
+        card.addEventListener('click', () => renderStockDetailPage(stock.ticker || stock.id));
         container.appendChild(card);
     });
-     if (!tradePage.querySelector('div')) {
-        tradePage.appendChild(container);
-    }
 };
 
 const renderDashboardPage = () => {
     const marketContainer = dashboardPage.querySelector('#dashboardMarketContainer') || document.createElement('div');
     if (!dashboardPage.querySelector('#dashboardMarketContainer')) {
         const title = document.createElement('h3');
-        title.className = 'text-xl font-bold text-white mb-4 mt-8';
         title.textContent = 'Market Overview';
         dashboardPage.appendChild(title);
         marketContainer.id = 'dashboardMarketContainer';
-        marketContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5";
+        marketContainer.className = "card-grid";
         dashboardPage.appendChild(marketContainer);
     }
     
     marketContainer.innerHTML = '';
-    const sortedStocks = Object.values(stockData).filter(s => s && s.ticker).sort((a, b) => a.ticker.localeCompare(b.ticker));
+    const sortedStocks = Object.values(stockData).filter(s => s && s.name).sort((a, b) => a.name.localeCompare(b.name));
     if (sortedStocks.length === 0) {
-        marketContainer.innerHTML = `<p class="text-gray-400">Market data is loading...</p>`;
+        marketContainer.innerHTML = `<p>Market data is loading...</p>`;
         return;
     }
     sortedStocks.forEach(stock => {
         const card = document.createElement('div');
-        card.className = 'bg-gray-800 p-4 rounded-lg shadow-lg cursor-pointer transition transform hover:-translate-y-1 hover:shadow-blue-500/20';
-        card.innerHTML = `<div class="flex justify-between items-baseline"><h3 class="text-lg font-bold text-white">${stock.name}</h3><span class="text-xs font-mono bg-gray-700 px-2 py-1 rounded">${stock.ticker}</span></div><p class="text-sm text-gray-400 mb-2">${stock.sector}</p><p class="text-2xl font-light text-white">$${stock.price.toFixed(2)}</p>`;
-        card.addEventListener('click', () => renderStockDetailPage(stock.id));
+        card.className = 'stock-card';
+        card.innerHTML = `
+            <div class="card-header">
+                <h3>${stock.name}</h3>
+                <span class="ticker-badge">${stock.ticker || stock.id}</span>
+            </div>
+            <p class="sector">${stock.sector}</p>
+            <p class="price">$${stock.price.toFixed(2)}</p>
+        `;
+        card.addEventListener('click', () => renderStockDetailPage(stock.ticker || stock.id));
         marketContainer.appendChild(card);
     });
 };
 
 const renderOrdersPage = () => {
-    ordersPage.innerHTML = `<h3 class="text-xl font-bold mb-4">Pending Orders</h3><div id="pendingOrdersList" class="space-y-3 mb-8"></div>`;
+    ordersPage.innerHTML = `<div class="section"><h2>Pending Orders</h2><div id="pendingOrdersList"></div></div>`;
     const pendingList = ordersPage.querySelector('#pendingOrdersList');
-    if (!pendingList) return;
     if (pendingOrders.length === 0) {
-        pendingList.innerHTML = `<p class="text-gray-400">You have no pending orders.</p>`;
+        pendingList.innerHTML = `<p>You have no pending orders.</p>`;
     } else {
         pendingList.innerHTML = '';
         pendingOrders.forEach(order => {
             const div = document.createElement('div');
-            div.className = 'bg-gray-800 p-4 rounded-lg flex justify-between items-center';
-            div.innerHTML = `<div><p class="font-bold text-white">${order.type.replace('-', ' ').toUpperCase()} ${order.ticker}</p><p class="text-sm text-gray-400">${order.quantity} shares @ $${order.limitPrice.toFixed(2)}</p></div><button data-id="${order.id}" class="cancel-order-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded">Cancel</button>`;
+            div.className = 'order-card';
+            div.innerHTML = `
+                <div>
+                    <p style="font-weight: 700;">${order.type.replace('-', ' ').toUpperCase()} ${order.ticker}</p>
+                    <p style="color: var(--text-muted);">${order.quantity} shares @ $${order.limitPrice.toFixed(2)}</p>
+                </div>
+                <button data-id="${order.id}" class="cancel-order-btn danger">Cancel</button>
+            `;
             pendingList.appendChild(div);
         });
     }
@@ -410,8 +468,35 @@ ordersPage.addEventListener('click', async e => {
 window.renderStockDetailPage = (ticker) => {
     const stock = stockData[ticker];
     if (!stock) return;
-    pageTitle.textContent = `${stock.name} (${stock.ticker})`;
-    stockDetailPage.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg shadow-xl"><div class="grid grid-cols-1 lg:grid-cols-3 gap-6"><div class="lg:col-span-2 bg-gray-900 p-4 rounded-lg h-96"><canvas id="stockChart"></canvas></div><div class="bg-gray-900 p-6 rounded-lg"><h3 class="text-xl font-bold mb-4 text-white">Place an Order</h3><div class="space-y-4"><div><h4 class="font-semibold mb-2">Market Order</h4><input type="number" id="marketQty" placeholder="Quantity" class="w-full bg-gray-700 p-2 rounded"><div class="flex space-x-2 mt-2"><button id="marketBuyBtn" class="flex-1 bg-green-600 p-2 rounded">Buy</button><button id="marketSellBtn" class="flex-1 bg-red-600 p-2 rounded">Sell</button></div></div><div><h4 class="font-semibold mb-2">Limit Order</h4><input type="number" id="limitQty" placeholder="Quantity" class="w-full bg-gray-700 p-2 rounded mb-2"><input type="number" id="limitPrice" placeholder="Price" class="w-full bg-gray-700 p-2 rounded"><div class="flex space-x-2 mt-2"><button id="limitBuyBtn" class="flex-1 bg-green-600 p-2 rounded">Limit Buy</button><button id="limitSellBtn" class="flex-1 bg-red-600 p-2 rounded">Limit Sell</button></div></div><div><h4 class="font-semibold mb-2">Stop Loss</h4><input type="number" id="stopQty" placeholder="Quantity" class="w-full bg-gray-700 p-2 rounded mb-2"><input type="number" id="stopPrice" placeholder="Trigger Price" class="w-full bg-gray-700 p-2 rounded"><button id="stopSellBtn" class="w-full mt-2 bg-orange-600 p-2 rounded">Set Stop Loss</button></div></div></div></div></div>`;
+    pageTitle.textContent = `${stock.name} (${ticker})`;
+    stockDetailPage.innerHTML = `
+        <div class="section" style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+            <div><canvas id="stockChart"></canvas></div>
+            <div class="order-form">
+                <h3>Place an Order</h3>
+                <form id="tradeForm">
+                    <h4>Market Order</h4>
+                    <input type="number" id="marketQty" placeholder="Quantity">
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" id="marketBuyBtn" class="success" style="flex: 1;">Buy</button>
+                        <button type="button" id="marketSellBtn" class="danger" style="flex: 1;">Sell</button>
+                    </div>
+                    <hr style="border-color: var(--input-bg);">
+                    <h4>Limit Order</h4>
+                    <input type="number" id="limitQty" placeholder="Quantity">
+                    <input type="number" id="limitPrice" placeholder="Price">
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" id="limitBuyBtn" class="success" style="flex: 1;">Limit Buy</button>
+                        <button type="button" id="limitSellBtn" class="danger" style="flex: 1;">Limit Sell</button>
+                    </div>
+                    <hr style="border-color: var(--input-bg);">
+                    <h4>Stop Loss</h4>
+                    <input type="number" id="stopQty" placeholder="Quantity">
+                    <input type="number" id="stopPrice" placeholder="Trigger Price">
+                    <button type="button" id="stopSellBtn" class="warning" style="width: 100%;">Set Stop Loss</button>
+                </form>
+            </div>
+        </div>`;
     drawStockChart(stock);
     attachTradeButtonListeners(ticker);
     showPage('stockDetailPage');
@@ -420,11 +505,11 @@ window.renderStockDetailPage = (ticker) => {
 const attachTradeButtonListeners = (ticker) => {
     document.getElementById('marketBuyBtn').addEventListener('click', () => {
         const qty = parseInt(document.getElementById('marketQty').value);
-        if(qty) executeTransaction(ticker, qty, 'market-buy');
+        if(qty > 0) executeTransaction(ticker, qty, 'market-buy');
     });
     document.getElementById('marketSellBtn').addEventListener('click', () => {
         const qty = parseInt(document.getElementById('marketQty').value);
-        if(qty) executeTransaction(ticker, qty, 'market-sell');
+        if(qty > 0) executeTransaction(ticker, qty, 'market-sell');
     });
     document.getElementById('limitBuyBtn').addEventListener('click', () => placeSpecialOrder(ticker, 'limit-buy'));
     document.getElementById('limitSellBtn').addEventListener('click', () => placeSpecialOrder(ticker, 'limit-sell'));
@@ -436,27 +521,28 @@ const executeTransaction = async (ticker, quantity, type) => {
     const cost = price * quantity;
     const newPortfolio = JSON.parse(JSON.stringify(userPortfolio));
     if (type === 'market-buy') {
-        if (newPortfolio.cash < cost) return;
+        if (newPortfolio.cash < cost) return alert("Insufficient funds.");
         newPortfolio.cash -= cost;
         newPortfolio.stocks[ticker] = (newPortfolio.stocks[ticker] || 0) + quantity;
     } else {
-        if ((newPortfolio.stocks[ticker] || 0) < quantity) return;
+        if ((newPortfolio.stocks[ticker] || 0) < quantity) return alert("Insufficient shares.");
         newPortfolio.cash += cost;
         newPortfolio.stocks[ticker] -= quantity;
+        if(newPortfolio.stocks[ticker] === 0) delete newPortfolio.stocks[ticker];
     }
     await setDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/portfolio`, 'main'), newPortfolio);
 };
 
 const placeSpecialOrder = async (ticker, type) => {
     let qty, price;
-    if (type === 'limit-buy' || type === 'limit-sell') {
+    if (type.includes('limit')) {
         qty = parseInt(document.getElementById('limitQty').value);
         price = parseFloat(document.getElementById('limitPrice').value);
     } else {
         qty = parseInt(document.getElementById('stopQty').value);
         price = parseFloat(document.getElementById('stopPrice').value);
     }
-    if (!qty || !price || qty <= 0 || price <= 0) return;
+    if (!qty || !price || qty <= 0 || price <= 0) return alert("Invalid quantity or price for special order.");
     const order = { userId: currentUserId, ticker, type, quantity: qty, limitPrice: price, status: 'pending', createdAt: serverTimestamp() };
     await addDoc(collection(db, `artifacts/${appId}/users/${currentUserId}/orders`), order);
     showPage('ordersPage');
@@ -466,12 +552,28 @@ const drawStockChart = (stock) => {
     const canvas = document.getElementById('stockChart');
     if (!canvas) return;
     if (activeChart) activeChart.destroy();
-    activeChart = new Chart(canvas, {
+    activeChart = new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
-            labels: stock.history.map((_, i) => i),
-            datasets: [{ data: stock.history, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.2 }]
+            labels: stock.history.map((_, i) => i + 1),
+            datasets: [{
+                label: 'Price History',
+                data: stock.history,
+                borderColor: 'var(--text-accent)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                fill: true,
+                tension: 0.2,
+                pointRadius: 0,
+            }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: 'var(--text-muted)' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                y: { ticks: { color: 'var(--text-muted)' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+            }
+        }
     });
 };
