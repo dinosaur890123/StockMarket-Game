@@ -97,7 +97,7 @@ onAuthStateChanged(auth, user => {
         authContainer.innerHTML = `<div class="flex flex-col items-center space-y-4"><img src="${user.photoURL}" class="w-16 h-16 rounded-full"><p>${user.displayName}</p><button id="signOutButton" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md mt-4">Sign Out</button></div>`;
         document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
         showPage('dashboardPage');
-        loadGameData(user.uid);
+        loadGameData(user); // Pass the whole user object
     } else {
         currentUserId = null;
         sidebar.classList.add('hidden');
@@ -108,12 +108,10 @@ onAuthStateChanged(auth, user => {
     }
 });
 
-// FIX: Add loading state to sign-in button
 mainSignInButton.addEventListener('click', () => {
     mainSignInButton.disabled = true;
     mainSignInButton.textContent = 'Signing In...';
     signInWithPopup(auth, provider).catch(error => {
-        // Re-enable the button if the user closes the popup or sign-in fails
         mainSignInButton.disabled = false;
         mainSignInButton.textContent = 'Sign In';
         console.error("Sign-in cancelled or failed:", error.message);
@@ -121,11 +119,11 @@ mainSignInButton.addEventListener('click', () => {
 });
 
 // --- Core Game Logic ---
-const loadGameData = async (userId) => {
+const loadGameData = async (user) => {
     await initializeMarketInFirestore();
     subscribeToStocks();
-    subscribeToPortfolio(userId);
-    subscribeToOrders(userId);
+    subscribeToPortfolio(user); // Pass the whole user object
+    subscribeToOrders(user.uid);
     subscribeToMarketData();
     subscribeToNews();
 };
@@ -240,7 +238,11 @@ const tryToUpdateMarket = async () => {
             }
         });
     } catch (e) {
-        console.log("Market update race failed:", e);
+        if (e.code === 'failed-precondition') {
+            console.log("Market update race lost. Another client is updating.");
+        } else {
+            console.error("Unexpected error in market update transaction:", e);
+        }
     }
 };
 
@@ -314,11 +316,29 @@ const subscribeToStocks = () => {
     }, console.error);
 };
 
-const subscribeToPortfolio = (userId) => {
-    const portfolioRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio`, 'main');
-    portfolioUnsubscribe = onSnapshot(portfolioRef, docSnap => {
+// FIX: This function now explicitly creates the parent user document.
+const subscribeToPortfolio = (user) => {
+    const portfolioRef = doc(db, `artifacts/${appId}/users/${user.uid}/portfolio`, 'main');
+    portfolioUnsubscribe = onSnapshot(portfolioRef, async (docSnap) => {
         if (!docSnap.exists()) {
-            setDoc(portfolioRef, { cash: 20000, stocks: {} });
+            // This is a new player, create their portfolio AND their main user document
+            const userRef = doc(db, `artifacts/${appId}/users`, user.uid);
+            const batch = writeBatch(db);
+
+            // Set the main user document so it's discoverable by admins
+            batch.set(userRef, {
+                displayName: user.displayName,
+                photoURL: user.photoURL,
+                joinedAt: serverTimestamp()
+            });
+
+            // Set their starting portfolio
+            batch.set(portfolioRef, { 
+                cash: 20000, 
+                stocks: {} 
+            });
+            
+            await batch.commit();
         } else {
             userPortfolio = docSnap.data();
             updatePortfolioValue();

@@ -147,16 +147,23 @@ manualNewsForm.addEventListener('submit', async (e) => {
 });
 
 // --- Player Management ---
+// FIX: This function now reads player metadata from the user document itself.
 async function loadPlayerData() {
     const usersRef = collection(db, `artifacts/${appId}/users`);
     try {
         const userSnapshots = await getDocs(usersRef);
         const players = [];
         for (const userDoc of userSnapshots.docs) {
+            const userData = userDoc.data(); // This contains displayName, photoURL, etc.
             const portfolioRef = doc(db, `artifacts/${appId}/users/${userDoc.id}/portfolio/main`);
             const portfolioSnap = await getDoc(portfolioRef);
             if (portfolioSnap.exists()) {
-                players.push({ id: userDoc.id, portfolio: portfolioSnap.data() });
+                players.push({ 
+                    id: userDoc.id, 
+                    portfolio: portfolioSnap.data(),
+                    displayName: userData.displayName,
+                    photoURL: userData.photoURL
+                });
             }
         }
         renderPlayerList(players);
@@ -186,7 +193,13 @@ function renderPlayerList(players) {
         const playerCard = document.createElement('div');
         playerCard.className = 'bg-gray-700 p-4 rounded-lg';
         playerCard.innerHTML = `
-            <p class="text-sm font-mono text-gray-400 truncate" title="${player.id}">${player.id}</p>
+            <div class="flex items-center mb-2">
+                <img src="${player.photoURL || 'https://placehold.co/40x40/7f8c8d/ecf0f1?text=?'}" class="w-10 h-10 rounded-full mr-4">
+                <div>
+                    <p class="font-bold text-white">${player.displayName || 'Anonymous'}</p>
+                    <p class="text-xs font-mono text-gray-400" title="${player.id}">${player.id}</p>
+                </div>
+            </div>
             <div class="flex justify-between items-center mt-2">
                 <div>
                     <p class="text-lg font-bold text-white">Net Worth: $${netWorth.toFixed(2)}</p>
