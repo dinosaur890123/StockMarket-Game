@@ -55,7 +55,7 @@ let stockUnsubscribe = null;
 let portfolioUnsubscribe = null;
 let ordersUnsubscribe = null;
 let newsUnsubscribe = null;
-let marketDataUnsubscribe = null; // Renamed from leaderboardUnsubscribe
+let marketDataUnsubscribe = null;
 let activeChart = null;
 let marketState = null;
 let marketUpdateInterval = null;
@@ -107,7 +107,18 @@ onAuthStateChanged(auth, user => {
         authContainer.innerHTML = '';
     }
 });
-mainSignInButton.addEventListener('click', () => signInWithPopup(auth, provider));
+
+// FIX: Add loading state to sign-in button
+mainSignInButton.addEventListener('click', () => {
+    mainSignInButton.disabled = true;
+    mainSignInButton.textContent = 'Signing In...';
+    signInWithPopup(auth, provider).catch(error => {
+        // Re-enable the button if the user closes the popup or sign-in fails
+        mainSignInButton.disabled = false;
+        mainSignInButton.textContent = 'Sign In';
+        console.error("Sign-in cancelled or failed:", error.message);
+    });
+});
 
 // --- Core Game Logic ---
 const loadGameData = async (userId) => {
@@ -115,22 +126,17 @@ const loadGameData = async (userId) => {
     subscribeToStocks();
     subscribeToPortfolio(userId);
     subscribeToOrders(userId);
-    subscribeToMarketData(); // Combined listener for market state and leaderboard
+    subscribeToMarketData();
     subscribeToNews();
 };
 
-// Combined listener for market document
 const subscribeToMarketData = () => {
     const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
     marketDataUnsubscribe = onSnapshot(marketDocRef, (docSnap) => {
         if (docSnap.exists()) {
             const marketData = docSnap.data();
-            
-            // Handle market state for price updates
             marketState = marketData;
             setupMarketUpdateLoop();
-
-            // Handle leaderboard rendering
             renderLeaderboard(marketData.leaderboard || []);
         } else {
             renderLeaderboard([]);

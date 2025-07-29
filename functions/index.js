@@ -82,9 +82,9 @@ async function updateLeaderboard(stocks) {
     players.sort((a, b) => b.netWorth - a.netWorth);
     const topPlayers = players.slice(0, 20); // Get top 20
 
-    // CORRECTED PATH: Update the main market document with a 'leaderboard' field.
+    // FIX: Use set with merge to robustly update the leaderboard field on the main market document.
     const marketDocRef = db.doc("artifacts/stock-market-game-v1/public/market");
-    await marketDocRef.update({ leaderboard: topPlayers, leaderboardLastUpdated: new Date() });
+    await marketDocRef.set({ leaderboard: topPlayers, leaderboardLastUpdated: new Date() }, { merge: true });
 }
 
 async function getStocks() {
