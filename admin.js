@@ -272,7 +272,7 @@ function renderCompanyList(companies) {
     const companyListEl = document.getElementById('companyList');
     companyListEl.innerHTML = '';
     if (Object.keys(companies).length === 0) {
-        companyListEl.innerHTML = '<p class="text-gray-400">No companies found.</p>';
+        companyListEl.innerHTML = '<p class="text-gray-300">No companies found.</p>';
         return;
     }
     Object.keys(companies).sort().forEach(ticker => {
@@ -307,7 +307,7 @@ companyList.addEventListener('click', async (e) => {
             document.getElementById('sector').value = company.sector;
             document.getElementById('price').value = company.price;
             document.getElementById('volatility').value = company.volatility;
-            document.getElementById('submitButton').textContent = 'Update Company';
+            document.getElementById('submitButton').textContent = 'Update Company data';
             isEditing = true;
             window.scrollTo(0, 0);
         }
