@@ -242,7 +242,7 @@ playerList.addEventListener('click', async (e) => {
                 stocks: {}
             });
             showAdminMessage(`User ${userId} has been reset.`);
-            loadPlayerData(); 
+            loadPlayerData(); // Refresh list
         }
     }
 });
@@ -291,7 +291,7 @@ companyList.addEventListener('click', async (e) => {
     const stockRef = doc(db, `artifacts/${appId}/public/market/stocks`, ticker);
 
     if (e.target.classList.contains('delete-btn')) {
-        if (confirm(`Confirm you want to delete ${ticker}?`)) {
+        if (confirm(`Are you sure you want to delete ${ticker}?`)) {
             await deleteDoc(stockRef);
             showAdminMessage(`${ticker} deleted.`);
         }
@@ -332,7 +332,7 @@ companyForm.addEventListener('submit', async (e) => {
     } else {
         companyData = { name, sector, price, volatility, history: [price] };
     }
-
+    
     await setDoc(stockRef, companyData, { merge: true });
     showAdminMessage(`Company ${ticker} saved!`);
     clearForm();
