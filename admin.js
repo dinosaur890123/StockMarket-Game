@@ -138,7 +138,6 @@ manualNewsForm.addEventListener('submit', async (e) => {
 });
 
 // managing players through admin
-// --- REPLACEMENT for the renderPlayerList function in admin.js ---
 function renderPlayerList(players) {
     playerList.innerHTML = '';
     if (players.length === 0) {
