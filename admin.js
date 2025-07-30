@@ -3,7 +3,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebas
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, getDocs, addDoc, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
-// Firebase Configuration
+// config for Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyDx1XsUhmqchGCHEiB0dcF8cV6JDCp39D0",
     authDomain: "stock-market-game-f0922.firebaseapp.com",
@@ -14,14 +14,15 @@ const firebaseConfig = {
     measurementId: "G-3V60XQ69VD"
 };
 
+// firebase stuff i had to copy
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 const appId = 'stock-market-game-v1';
 
-const ADMIN_UID = "XbwQTnFRrTaZ73IVHKjNXz4IaVz1"; // my uid
-
+// Admin uid for access
+const ADMIN_UID = "XbwQTnFRrTaZ73IVHKjNXz4IaVz1";
 const authContainer = document.getElementById('authContainer');
 const adminContent = document.getElementById('adminContent');
 const unauthorizedMessage = document.getElementById('unauthorizedMessage');
@@ -32,18 +33,23 @@ const formTitle = document.getElementById('formTitle');
 const tickerInput = document.getElementById('ticker');
 const adminMessageBox = document.getElementById('adminMessageBox');
 const adminMessageText = document.getElementById('adminMessageText');
+// Market Controls
 const toggleMarketBtn = document.getElementById('toggleMarketBtn');
 const marketStatus = document.getElementById('marketStatus');
 const tickIntervalInput = document.getElementById('tickInterval');
 const setTickIntervalBtn = document.getElementById('setTickIntervalBtn');
+// Manual News
 const manualNewsForm = document.getElementById('manualNewsForm');
 const newsTickerSelect = document.getElementById('newsTicker');
+// Player Management
 const playerList = document.getElementById('playerList');
 
 
 let isEditing = false;
 let currentCompanies = {};
 let marketState = null;
+
+// --- Authentication ---
 onAuthStateChanged(auth, user => {
     if (loginPrompt) loginPrompt.classList.add('hidden');
     if (user) {
@@ -70,7 +76,6 @@ onAuthStateChanged(auth, user => {
     }
 });
 
-// admin ui
 const showAdminMessage = (text, isError = false) => {
     adminMessageText.textContent = text;
     adminMessageBox.classList.remove('hidden');
@@ -79,7 +84,7 @@ const showAdminMessage = (text, isError = false) => {
     setTimeout(() => adminMessageBox.classList.add('hidden'), 3000);
 };
 
-// Admin control over market...
+// admin market control
 const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
 onSnapshot(marketDocRef, (docSnap) => {
     if (docSnap.exists()) {
@@ -111,7 +116,7 @@ setTickIntervalBtn.addEventListener('click', () => {
     }
 });
 
-// --- Manual News Event ---
+// News managment
 manualNewsForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const headline = manualNewsForm.newsHeadline.value;
@@ -137,47 +142,30 @@ manualNewsForm.addEventListener('submit', async (e) => {
     manualNewsForm.reset();
 });
 
-// managing players through admin
-function renderPlayerList(players) {
-    playerList.innerHTML = '';
-    if (players.length === 0) {
-        playerList.innerHTML = '<p class="text-gray-400">No players found.</p>';
-        return;
-    }
-
-    players.forEach(player => {
-        const portfolio = player.portfolio;
-        let stockValue = 0;
-        if (portfolio.stocks) {
-            stockValue = Object.keys(portfolio.stocks).reduce((acc, ticker) => {
-                return acc + (portfolio.stocks[ticker] * (currentCompanies[ticker]?.price || 0));
-            }, 0);
+// Player management
+async function loadPlayerData() {
+    const usersRef = collection(db, `artifacts/${appId}/users`);
+    try {
+        const userSnapshots = await getDocs(usersRef);
+        const players = [];
+        for (const userDoc of userSnapshots.docs) {
+            const userData = userDoc.data(); // This contains displayName, photoURL, etc.
+            const portfolioRef = doc(db, `artifacts/${appId}/users/${userDoc.id}/portfolio/main`);
+            const portfolioSnap = await getDoc(portfolioRef);
+            if (portfolioSnap.exists()) {
+                players.push({ 
+                    id: userDoc.id, 
+                    portfolio: portfolioSnap.data(),
+                    displayName: userData.displayName,
+                    photoURL: userData.photoURL
+                });
+            }
         }
-        const netWorth = portfolio.cash + stockValue;
-
-        const playerCard = document.createElement('div');
-        playerCard.className = 'bg-gray-700 p-4 rounded-lg';
-        playerCard.innerHTML = `
-            <div class="flex items-center mb-2">
-                <img src="${player.photoURL || 'https://placehold.co/40x40/7f8c8d/ecf0f1?text=?'}" class="w-10 h-10 rounded-full mr-4">
-                <div>
-                    <p class="font-bold text-white">${player.displayName || 'Anonymous'}</p>
-                    <p class="text-xs font-mono text-gray-400" title="${player.id}">${player.id}</p>
-                </div>
-            </div>
-            <div class="flex justify-between items-center mt-2">
-                <div>
-                    <p class="text-lg font-bold text-white">Net Worth: $${netWorth.toFixed(2)}</p>
-                    <p class="text-sm text-green-400">Cash: $${portfolio.cash.toFixed(2)}</p>
-                </div>
-                <div class="flex space-x-2">
-                    <button data-id="${player.id}" class="add-cash-btn bg-green-600 hover:bg-green-700 p-2 rounded text-xs">Award Cash</button>
-                    <button data-id="${player.id}" class="reset-btn bg-red-600 hover:bg-red-700 p-2 rounded text-xs">Reset</button>
-                </div>
-            </div>
-        `;
-        playerList.appendChild(playerCard);
-    });
+        renderPlayerList(players);
+    } catch (error) {
+        console.error("Error loading player data:", error);
+        playerList.innerHTML = `<p class="text-red-400">Could not load player data. Check Firestore rules.</p>`;
+    }
 }
 
 function renderPlayerList(players) {
@@ -236,7 +224,7 @@ playerList.addEventListener('click', async (e) => {
                 cash: increment(amount)
             });
             showAdminMessage(`Awarded $${amount} to user.`);
-            loadPlayerData(); // Refresh list
+            loadPlayerData(); 
         } else {
             showAdminMessage("Invalid amount.", true);
         }
@@ -249,7 +237,7 @@ playerList.addEventListener('click', async (e) => {
                 stocks: {}
             });
             showAdminMessage(`User ${userId} has been reset.`);
-            loadPlayerData(); // Refresh list
+            loadPlayerData();
         }
     }
 });
@@ -279,7 +267,7 @@ function renderCompanyList(companies) {
     const companyListEl = document.getElementById('companyList');
     companyListEl.innerHTML = '';
     if (Object.keys(companies).length === 0) {
-        companyListEl.innerHTML = '<p class="text-gray-300">No companies found.</p>';
+        companyListEl.innerHTML = '<p class="text-gray-400">No companies found.</p>';
         return;
     }
     Object.keys(companies).sort().forEach(ticker => {
@@ -314,7 +302,7 @@ companyList.addEventListener('click', async (e) => {
             document.getElementById('sector').value = company.sector;
             document.getElementById('price').value = company.price;
             document.getElementById('volatility').value = company.volatility;
-            document.getElementById('submitButton').textContent = 'Update Company data';
+            document.getElementById('submitButton').textContent = 'Update Company';
             isEditing = true;
             window.scrollTo(0, 0);
         }
