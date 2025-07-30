@@ -138,29 +138,47 @@ manualNewsForm.addEventListener('submit', async (e) => {
 });
 
 // managing players through admin
-async function loadPlayerData() {
-    const usersRef = collection(db, `artifacts/${appId}/users`);
-    try {
-        const userSnapshots = await getDocs(usersRef);
-        const players = [];
-        for (const userDoc of userSnapshots.docs) {
-            const userData = userDoc.data(); 
-            const portfolioRef = doc(db, `artifacts/${appId}/users/${userDoc.id}/portfolio/main`);
-            const portfolioSnap = await getDoc(portfolioRef);
-            if (portfolioSnap.exists()) {
-                players.push({ 
-                id: userDoc.id, 
-                portfolio: portfolioSnap.data(),
-                displayName: userData.displayName,
-                photoURL: userData.photoURL
-                });
-            }
-        }
-        renderPlayerList(players);
-    } catch (error) {
-    console.error("Error loading player data:", error);
-    playerList.innerHTML = `<p class="text-red-400">Could not load player data. Check Firestore rules.</p>`;
+// --- REPLACEMENT for the renderPlayerList function in admin.js ---
+function renderPlayerList(players) {
+    playerList.innerHTML = '';
+    if (players.length === 0) {
+        playerList.innerHTML = '<p class="text-gray-400">No players found.</p>';
+        return;
     }
+
+    players.forEach(player => {
+        const portfolio = player.portfolio;
+        let stockValue = 0;
+        if (portfolio.stocks) {
+            stockValue = Object.keys(portfolio.stocks).reduce((acc, ticker) => {
+                return acc + (portfolio.stocks[ticker] * (currentCompanies[ticker]?.price || 0));
+            }, 0);
+        }
+        const netWorth = portfolio.cash + stockValue;
+
+        const playerCard = document.createElement('div');
+        playerCard.className = 'bg-gray-700 p-4 rounded-lg';
+        playerCard.innerHTML = `
+            <div class="flex items-center mb-2">
+                <img src="${player.photoURL || 'https://placehold.co/40x40/7f8c8d/ecf0f1?text=?'}" class="w-10 h-10 rounded-full mr-4">
+                <div>
+                    <p class="font-bold text-white">${player.displayName || 'Anonymous'}</p>
+                    <p class="text-xs font-mono text-gray-400" title="${player.id}">${player.id}</p>
+                </div>
+            </div>
+            <div class="flex justify-between items-center mt-2">
+                <div>
+                    <p class="text-lg font-bold text-white">Net Worth: $${netWorth.toFixed(2)}</p>
+                    <p class="text-sm text-green-400">Cash: $${portfolio.cash.toFixed(2)}</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button data-id="${player.id}" class="add-cash-btn bg-green-600 hover:bg-green-700 p-2 rounded text-xs">Award Cash</button>
+                    <button data-id="${player.id}" class="reset-btn bg-red-600 hover:bg-red-700 p-2 rounded text-xs">Reset</button>
+                </div>
+            </div>
+        `;
+        playerList.appendChild(playerCard);
+    });
 }
 
 function renderPlayerList(players) {
