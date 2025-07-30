@@ -11,13 +11,11 @@ initializeApp();
 const db = getFirestore();
 const auth = getAuth();
 
-// --- Main Scheduled Function ---
-// This function will run automatically every 5 minutes.
+// Update function
 exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
     logger.log("Game Update Ticker starting...");
 
     try {
-        // --- 1. Update Leaderboard ---
         logger.log("Updating leaderboard...");
         const stocks = await getStocks();
         if (stocks.length > 0) {
@@ -26,8 +24,6 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
         } else {
             logger.warn("No stocks found, skipping leaderboard update.");
         }
-
-        // --- 2. Generate AI News (less frequently) ---
         const minute = new Date(event.scheduleTime).getMinutes();
         if (minute % 15 === 0) {
             logger.log("Generating AI news...");
@@ -49,7 +45,6 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
     }
 });
 
-// --- Leaderboard Logic ---
 async function updateLeaderboard(stocks) {
     const usersRef = db.collection("artifacts/stock-market-game-v1/users");
     const usersSnap = await usersRef.get();
@@ -82,7 +77,6 @@ async function updateLeaderboard(stocks) {
     players.sort((a, b) => b.netWorth - a.netWorth);
     const topPlayers = players.slice(0, 20); // Get top 20
 
-    // FIX: Use set with merge to robustly update the leaderboard field on the main market document.
     const marketDocRef = db.doc("artifacts/stock-market-game-v1/public/market");
     await marketDocRef.set({ leaderboard: topPlayers, leaderboardLastUpdated: new Date() }, { merge: true });
 }
@@ -94,7 +88,6 @@ async function getStocks() {
 }
 
 
-// --- AI News Logic (Unchanged) ---
 async function getAccessToken() {
     const auth = new GoogleAuth({ scopes: "https://www.googleapis.com/auth/cloud-platform" });
     const client = await auth.getClient();

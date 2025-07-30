@@ -3,7 +3,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebas
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, getDocs, addDoc, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
-// --- Firebase Configuration ---
+// Firebase Configuration
 const firebaseConfig = {
     apiKey: "AIzaSyDx1XsUhmqchGCHEiB0dcF8cV6JDCp39D0",
     authDomain: "stock-market-game-f0922.firebaseapp.com",
@@ -14,17 +14,14 @@ const firebaseConfig = {
     measurementId: "G-3V60XQ69VD"
 };
 
-// --- App Initialization ---
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 const appId = 'stock-market-game-v1';
 
-// --- Admin UID ---
-const ADMIN_UID = "XbwQTnFRrTaZ73IVHKjNXz4IaVz1";
+const ADMIN_UID = "XbwQTnFRrTaZ73IVHKjNXz4IaVz1"; // my uid
 
-// --- DOM References ---
 const authContainer = document.getElementById('authContainer');
 const adminContent = document.getElementById('adminContent');
 const unauthorizedMessage = document.getElementById('unauthorizedMessage');
@@ -35,24 +32,18 @@ const formTitle = document.getElementById('formTitle');
 const tickerInput = document.getElementById('ticker');
 const adminMessageBox = document.getElementById('adminMessageBox');
 const adminMessageText = document.getElementById('adminMessageText');
-// Market Controls
 const toggleMarketBtn = document.getElementById('toggleMarketBtn');
 const marketStatus = document.getElementById('marketStatus');
 const tickIntervalInput = document.getElementById('tickInterval');
 const setTickIntervalBtn = document.getElementById('setTickIntervalBtn');
-// Manual News
 const manualNewsForm = document.getElementById('manualNewsForm');
 const newsTickerSelect = document.getElementById('newsTicker');
-// Player Management
 const playerList = document.getElementById('playerList');
 
 
-// --- State ---
 let isEditing = false;
 let currentCompanies = {};
 let marketState = null;
-
-// --- Authentication ---
 onAuthStateChanged(auth, user => {
     if (loginPrompt) loginPrompt.classList.add('hidden');
     if (user) {
@@ -79,7 +70,7 @@ onAuthStateChanged(auth, user => {
     }
 });
 
-// --- UI Helpers ---
+// admin ui
 const showAdminMessage = (text, isError = false) => {
     adminMessageText.textContent = text;
     adminMessageBox.classList.remove('hidden');
@@ -88,7 +79,7 @@ const showAdminMessage = (text, isError = false) => {
     setTimeout(() => adminMessageBox.classList.add('hidden'), 3000);
 };
 
-// --- Market State Control ---
+// Admin control over market...
 const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
 onSnapshot(marketDocRef, (docSnap) => {
     if (docSnap.exists()) {
@@ -146,30 +137,29 @@ manualNewsForm.addEventListener('submit', async (e) => {
     manualNewsForm.reset();
 });
 
-// --- Player Management ---
-// FIX: This function now reads player metadata from the user document itself.
+// managing players through admin
 async function loadPlayerData() {
     const usersRef = collection(db, `artifacts/${appId}/users`);
     try {
         const userSnapshots = await getDocs(usersRef);
         const players = [];
         for (const userDoc of userSnapshots.docs) {
-            const userData = userDoc.data(); // This contains displayName, photoURL, etc.
+            const userData = userDoc.data(); 
             const portfolioRef = doc(db, `artifacts/${appId}/users/${userDoc.id}/portfolio/main`);
             const portfolioSnap = await getDoc(portfolioRef);
             if (portfolioSnap.exists()) {
                 players.push({ 
-                    id: userDoc.id, 
-                    portfolio: portfolioSnap.data(),
-                    displayName: userData.displayName,
-                    photoURL: userData.photoURL
+                id: userDoc.id, 
+                portfolio: portfolioSnap.data(),
+                displayName: userData.displayName,
+                photoURL: userData.photoURL
                 });
             }
         }
         renderPlayerList(players);
     } catch (error) {
-        console.error("Error loading player data:", error);
-        playerList.innerHTML = `<p class="text-red-400">Could not load player data. Check Firestore rules.</p>`;
+    console.error("Error loading player data:", error);
+    playerList.innerHTML = `<p class="text-red-400">Could not load player data. Check Firestore rules.</p>`;
     }
 }
 
@@ -248,7 +238,7 @@ playerList.addEventListener('click', async (e) => {
 });
 
 
-// --- Company Management ---
+// Company management
 const stocksCollectionRef = collection(db, `artifacts/${appId}/public/market/stocks`);
 onSnapshot(stocksCollectionRef, (snapshot) => {
     let companies = {};

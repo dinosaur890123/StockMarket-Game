@@ -1,9 +1,8 @@
-// Firebase Imports
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, getDocs, addDoc, serverTimestamp, where, updateDoc, getDoc, runTransaction, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
-// --- Firebase Configuration ---
 const firebaseConfig = {
     apiKey: "AIzaSyDx1XsUhmqchGCHEiB0dcF8cV6JDCp39D0",
     authDomain: "stock-market-game-f0922.firebaseapp.com",
@@ -14,14 +13,11 @@ const firebaseConfig = {
     measurementId: "G-3V60XQ69VD"
 };
 
-// --- App Initialization ---
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 const appId = 'stock-market-game-v1';
-
-// --- DOM Element References ---
 const sidebar = document.getElementById('sidebar');
 const appContainer = document.getElementById('appContainer');
 const authContainer = document.getElementById('authContainer');
@@ -45,7 +41,7 @@ const headerCash = document.getElementById('headerCash');
 const headerStocks = document.getElementById('headerStocks');
 const headerNetWorth = document.getElementById('headerNetWorth');
 
-// --- Game State ---
+// --- Game state ---
 let currentUserId = null;
 let userPortfolio = null;
 let stockData = {};
@@ -60,7 +56,7 @@ let activeChart = null;
 let marketState = null;
 let marketUpdateInterval = null;
 
-// --- Navigation ---
+// --- nav ---
 const showPage = (pageId) => {
     [dashboardPage, tradePage, ordersPage, stockDetailPage, leaderboardPage].forEach(p => p.classList.add('hidden'));
     const pageElement = document.getElementById(pageId);
@@ -83,7 +79,7 @@ Object.keys(navLinks).forEach(key => {
     });
 });
 
-// --- Authentication ---
+// --- authentication ---
 onAuthStateChanged(auth, user => {
     [stockUnsubscribe, portfolioUnsubscribe, ordersUnsubscribe, marketDataUnsubscribe, newsUnsubscribe].forEach(unsub => { if (unsub) unsub(); });
     if (marketUpdateInterval) clearInterval(marketUpdateInterval);
@@ -97,7 +93,7 @@ onAuthStateChanged(auth, user => {
         authContainer.innerHTML = `<div class="flex flex-col items-center space-y-4"><img src="${user.photoURL}" class="w-16 h-16 rounded-full"><p>${user.displayName}</p><button id="signOutButton" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md mt-4">Sign Out</button></div>`;
         document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
         showPage('dashboardPage');
-        loadGameData(user); // Pass the whole user object
+        loadGameData(user); 
     } else {
         currentUserId = null;
         sidebar.classList.add('hidden');
@@ -118,11 +114,11 @@ mainSignInButton.addEventListener('click', () => {
     });
 });
 
-// --- Core Game Logic ---
+// Game logic
 const loadGameData = async (user) => {
     await initializeMarketInFirestore();
     subscribeToStocks();
-    subscribeToPortfolio(user); // Pass the whole user object
+    subscribeToPortfolio(user); // Pass the whole user object.
     subscribeToOrders(user.uid);
     subscribeToMarketData();
     subscribeToNews();
@@ -316,28 +312,22 @@ const subscribeToStocks = () => {
     }, console.error);
 };
 
-// FIX: This function now explicitly creates the parent user document.
 const subscribeToPortfolio = (user) => {
     const portfolioRef = doc(db, `artifacts/${appId}/users/${user.uid}/portfolio`, 'main');
     portfolioUnsubscribe = onSnapshot(portfolioRef, async (docSnap) => {
         if (!docSnap.exists()) {
-            // This is a new player, create their portfolio AND their main user document
             const userRef = doc(db, `artifacts/${appId}/users`, user.uid);
             const batch = writeBatch(db);
-
-            // Set the main user document so it's discoverable by admins
             batch.set(userRef, {
                 displayName: user.displayName,
                 photoURL: user.photoURL,
                 joinedAt: serverTimestamp()
             });
 
-            // Set their starting portfolio
             batch.set(portfolioRef, { 
                 cash: 20000, 
                 stocks: {} 
             });
-            
             await batch.commit();
         } else {
             userPortfolio = docSnap.data();
@@ -399,7 +389,6 @@ const updatePortfolioValue = () => {
     headerStocks.textContent = `$${stockValue.toFixed(2)}`;
     headerNetWorth.textContent = `$${(userPortfolio.cash + stockValue).toFixed(2)}`;
 };
-
 const renderTradePage = () => {
     tradePage.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>`;
     const container = tradePage.querySelector('div');
