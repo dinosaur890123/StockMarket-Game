@@ -6,16 +6,18 @@ const { GoogleAuth } = require("google-auth-library");
 const { logger } = require("firebase-functions");
 const fetch = require("node-fetch");
 
-// Initialize Firebase Admin SDK
 initializeApp();
 const db = getFirestore();
 const auth = getAuth();
 
-// Update function
 exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
     logger.log("Game Update Ticker starting...");
 
     try {
+        logger.log("Deactivating old news events...");
+        await deactivateActiveNews();
+        logger.log("Old news events deactivated.");
+
         logger.log("Updating leaderboard...");
         const stocks = await getStocks();
         if (stocks.length > 0) {
@@ -24,6 +26,7 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
         } else {
             logger.warn("No stocks found, skipping leaderboard update.");
         }
+
         const minute = new Date(event.scheduleTime).getMinutes();
         if (minute % 15 === 0) {
             logger.log("Generating AI news...");
@@ -45,6 +48,24 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
     }
 });
 
+async function deactivateActiveNews() {
+    const newsRef = db.collection("artifacts/stock-market-game-v1/public/market/news");
+    const activeNewsQuery = newsRef.where("is_active", "==", true);
+    const snapshot = await activeNewsQuery.get();
+
+    if (snapshot.empty) {
+        return; // No active news to deactivate
+    }
+
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { is_active: false });
+    });
+    await batch.commit();
+}
+
+
+// Leaderboard
 async function updateLeaderboard(stocks) {
     const usersRef = db.collection("artifacts/stock-market-game-v1/users");
     const usersSnap = await usersRef.get();
@@ -75,7 +96,7 @@ async function updateLeaderboard(stocks) {
     }
 
     players.sort((a, b) => b.netWorth - a.netWorth);
-    const topPlayers = players.slice(0, 20); // Get top 20
+    const topPlayers = players.slice(0, 20);
 
     const marketDocRef = db.doc("artifacts/stock-market-game-v1/public/market");
     await marketDocRef.set({ leaderboard: topPlayers, leaderboardLastUpdated: new Date() }, { merge: true });

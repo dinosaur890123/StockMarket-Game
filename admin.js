@@ -13,14 +13,12 @@ const firebaseConfig = {
     appId: "1:860554882495:web:c20583fed1530008b5850a",
     measurementId: "G-3V60XQ69VD"
 };
-
 // firebase stuff i had to copy
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 const appId = 'stock-market-game-v1';
-
 // Admin uid for access
 const ADMIN_UID = "XbwQTnFRrTaZ73IVHKjNXz4IaVz1";
 const authContainer = document.getElementById('authContainer');
