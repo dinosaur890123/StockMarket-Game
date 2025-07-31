@@ -43,13 +43,11 @@ const manualNewsForm = document.getElementById('manualNewsForm');
 const newsTickerSelect = document.getElementById('newsTicker');
 // Player Management
 const playerList = document.getElementById('playerList');
-
-
 let isEditing = false;
 let currentCompanies = {};
 let marketState = null;
 
-// --- Authentication ---
+// Authentication
 onAuthStateChanged(auth, user => {
     if (loginPrompt) loginPrompt.classList.add('hidden');
     if (user) {
@@ -122,7 +120,6 @@ manualNewsForm.addEventListener('submit', async (e) => {
     const headline = manualNewsForm.newsHeadline.value;
     const ticker = manualNewsForm.newsTicker.value;
     const impact = parseFloat(manualNewsForm.newsImpact.value);
-
     if (!headline || !ticker || isNaN(impact)) {
         return showAdminMessage("Please fill all news fields.", true);
     }

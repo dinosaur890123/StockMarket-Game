@@ -11,18 +11,14 @@ initializeApp();
 const db = getFirestore();
 const auth = getAuth();
 
-// --- Main Scheduled Function ---
-// This function will run automatically every 5 minutes.
 exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
     logger.log("Game Update Ticker starting...");
 
     try {
-        // --- 1. Deactivate old news events (THE FIX) ---
         logger.log("Deactivating old news events...");
         await deactivateActiveNews();
         logger.log("Old news events deactivated.");
 
-        // --- 2. Update Leaderboard ---
         logger.log("Updating leaderboard...");
         const stocks = await getStocks();
         if (stocks.length > 0) {
@@ -32,7 +28,6 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
             logger.warn("No stocks found, skipping leaderboard update.");
         }
 
-        // --- 3. Generate AI News (less frequently) ---
         const minute = new Date(event.scheduleTime).getMinutes();
         if (minute % 15 === 0) {
             logger.log("Generating AI news...");
@@ -53,8 +48,15 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
         logger.error("Error in Game Update Ticker:", error);
     }
 });
-
-// --- News Lifecycle Management (THE FIX) ---
+// dailycleanup the news so it doesn't become so cluttered
+exports.dailyCleanup = onSchedule("0 0 * * *", async (event) => {
+    logger.log("Running daily cleanup task to clear old news...");
+    try {
+        await clearOldNews();
+    } catch (error) {
+        logger.error("Error clearing old news:", error);
+    }
+});
 async function deactivateActiveNews() {
     const newsRef = db.collection("artifacts/stock-market-game-v1/public/market/news");
     const activeNewsQuery = newsRef.where("is_active", "==", true);
@@ -167,4 +169,19 @@ async function saveNews(headline, analysis) {
         timestamp: new Date(),
         is_active: true
     });
+}
+async function clearOldNews() {
+    const newsRef = db.collection("artifacts/stock-market-game-v1/public/market/news");
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const oldNewsQuery = newsRef.where("timestamp", "<=", twentyFourHoursAgo);
+    const snapshot = await oldNewsQuery.get();
+    if (snapshot.empty) {
+
+    }
+
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+    });
+    await batch.commit();
 }
