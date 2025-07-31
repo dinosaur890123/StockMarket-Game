@@ -19,7 +19,9 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 const appId = 'stock-market-game-v1';
+
 // Admin uid for access
+
 const ADMIN_UID = "XbwQTnFRrTaZ73IVHKjNXz4IaVz1";
 const authContainer = document.getElementById('authContainer');
 const adminContent = document.getElementById('adminContent');
