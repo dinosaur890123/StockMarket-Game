@@ -94,7 +94,7 @@ onSnapshot(marketDocRef, (docSnap) => {
             toggleMarketBtn.textContent = 'Pause Market';
             toggleMarketBtn.className = 'bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md';
         } else {
-            marketStatus.textContent = 'Paused';
+            marketStatus.textContent = 'Currently Paused';
             marketStatus.className = 'font-semibold text-red-500';
             toggleMarketBtn.textContent = 'Resume Market';
             toggleMarketBtn.className = 'bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md';
@@ -110,7 +110,7 @@ setTickIntervalBtn.addEventListener('click', () => {
         updateDoc(marketDocRef, { tick_interval_seconds: newInterval });
         showAdminMessage(`Interval set to ${newInterval} seconds.`);
     } else {
-        showAdminMessage('Invalid interval.', true);
+        showAdminMessage('This interval is not valid.', true);
     }
 });
 
@@ -121,9 +121,8 @@ manualNewsForm.addEventListener('submit', async (e) => {
     const ticker = manualNewsForm.newsTicker.value;
     const impact = parseFloat(manualNewsForm.newsImpact.value);
     if (!headline || !ticker || isNaN(impact)) {
-        return showAdminMessage("Please fill all news fields.", true);
+        return showAdminMessage("Please fill all news fields to broadcast a news event.", true);
     }
-
     const newsRef = collection(db, `artifacts/${appId}/public/market/news`);
     await addDoc(newsRef, {
         headline,
