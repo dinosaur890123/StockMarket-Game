@@ -4,6 +4,15 @@ import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, query, g
 
 const TRANSACTION_FEE = 5.00;
 
+const ACHIEVEMENTS = {
+    first_trade: { title: "First Trade", description: "Make your first stock purchase." },
+    first_profit: { title: "First Profit", description: "Sell a stock for more than you paid for it." },
+    paper_hands: { title: "Paper Hands", description: "Sell a stock for a loss." },
+    diversified: { title: "Diversified Investor", description: "Own shares in 3 different companies at the same time." },
+    high_roller: { title: "High Roller", description: "Reach a net worth of over $50,000." },
+    millionaire: { title: "Millionaire", description: "Reach a net worth of $1,000,000." }
+};
+
 const firebaseConfig = {
     apiKey: "AIzaSyDx1XsUhmqchGCHEiB0dcF8cV6JDCp39D0",
     authDomain: "stock-market-game-f0922.firebaseapp.com",
@@ -33,6 +42,7 @@ const ordersPage = document.getElementById('ordersPage');
 const stockDetailPage = document.getElementById('stockDetailPage');
 const leaderboardPage = document.getElementById('leaderboardPage');
 const helpPage = document.getElementById('helpPage');
+const achievementsPage = document.getElementById('achievementsPage');
 const newsFeedContainer = document.getElementById('newsFeedContainer');
 const messageBox = document.getElementById('messageBox');
 const messageText = document.getElementById('messageText');
@@ -41,6 +51,7 @@ const navLinks = {
     trade: document.getElementById('navTrade'),
     orders: document.getElementById('navOrders'),
     leaderboard: document.getElementById('navLeaderboard'),
+    achievements: document.getElementById('navAchievements'),
     help: document.getElementById('navHelp'),
 };
 const headerCash = document.getElementById('headerCash');
@@ -71,10 +82,9 @@ const showMessage = (text, isError = false) => {
 };
 
 const showPage = (pageId) => {
-    [dashboardPage, tradePage, ordersPage, stockDetailPage, leaderboardPage, helpPage].forEach(p => p.classList.add('hidden'));
+    [dashboardPage, tradePage, ordersPage, stockDetailPage, leaderboardPage, helpPage, achievementsPage].forEach(p => p.classList.add('hidden'));
     const pageElement = document.getElementById(pageId);
     if (pageElement) pageElement.classList.remove('hidden');
-
     Object.values(navLinks).forEach(link => link.classList.remove('active'));
     const activeLink = document.getElementById(`nav${pageId.replace('Page', '')}`);
     if(activeLink) activeLink.classList.add('active');
@@ -83,6 +93,7 @@ const showPage = (pageId) => {
     if (pageId === 'tradePage') pageTitle.textContent = 'Trade';
     if (pageId === 'ordersPage') pageTitle.textContent = 'My Orders';
     if (pageId === 'leaderboardPage') pageTitle.textContent = 'Leaderboard';
+    if (pageId === 'achievementsPage') pageTitle.textContent = 'Achievements';
     if (pageId === 'helpPage') pageTitle.textContent = 'Help';
 };
 
@@ -324,11 +335,18 @@ const subscribeToPortfolio = (user) => {
                 photoURL: user.photoURL,
                 joinedAt: serverTimestamp()
             });
-            batch.set(portfolioRef, { cash: 20000, stocks: {} });
+            batch.set(portfolioRef, { 
+                cash: 20000, 
+                stocks: {},
+                achievements: {},
+                trade_history: []
+            });
             await batch.commit();
         } else {
             userPortfolio = docSnap.data();
             updatePortfolioValue();
+            checkAndUnlockAchievements();
+            renderAchievementsPage();
         }
     });
 };
@@ -543,4 +561,50 @@ const drawStockChart = (stock) => {
             }
         }
     });
+};
+
+const checkAndUnlockAchievements = async () => {
+    if (!userPortfolio || !currentUserId) return;
+    const achievements = userPortfolio.achievements || {};
+    let newAchievements = [];
+
+    const netWorth = (userPortfolio.cash || 0) + Object.keys(userPortfolio.stocks || {}).reduce((acc, ticker) => {
+        return acc + ((userPortfolio.stocks[ticker] || 0) * (stockData[ticker]?.price || 0));
+    }, 0);
+
+    if (!achievements.first_trade && Object.keys(userPortfolio.stocks || {}).length > 0) newAchievements.push('first_trade');
+    if (!achievements.diversified && Object.keys(userPortfolio.stocks || {}).length >= 3) newAchievements.push('diversified');
+    if (!achievements.high_roller && netWorth > 50000) newAchievements.push('high_roller');
+    if (!achievements.millionaire && netWorth > 1000000) newAchievements.push('millionaire');
+
+    if (newAchievements.length > 0) {
+        const portfolioRef = doc(db, `artifacts/${appId}/users/${currentUserId}/portfolio`, 'main');
+        const updates = {};
+        newAchievements.forEach(id => {
+            updates[`achievements.${id}`] = true;
+            const achievement = ACHIEVEMENTS[id];
+            showMessage(`🏆 Achievement Unlocked: ${achievement.title}!`);
+        });
+        await updateDoc(portfolioRef, updates);
+    }
+};
+
+const renderAchievementsPage = () => {
+    if (!userPortfolio) return;
+    const unlocked = userPortfolio.achievements || {};
+    achievementsPage.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>`;
+    const container = achievementsPage.querySelector('div');
+    
+    for (const id in ACHIEVEMENTS) {
+        const achievement = ACHIEVEMENTS[id];
+        const isUnlocked = unlocked[id];
+        const card = document.createElement('div');
+        card.className = `p-6 rounded-lg shadow-lg ${isUnlocked ? 'bg-green-900 border-green-500' : 'bg-gray-700 border-gray-600'} border-2`;
+        card.innerHTML = `
+            <h3 class="text-xl font-bold ${isUnlocked ? 'text-white' : 'text-gray-400'}">${achievement.title}</h3>
+            <p class="mt-2 ${isUnlocked ? 'text-gray-300' : 'text-gray-500'}">${achievement.description}</p>
+            ${isUnlocked ? '<div class="mt-4 text-xs font-bold text-yellow-400">UNLOCKED</div>' : ''}
+        `;
+        container.appendChild(card);
+    }
 };
