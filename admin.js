@@ -133,11 +133,9 @@ manualNewsForm.addEventListener('submit', async (e) => {
         is_active: true,
         source: 'manual'
     });
-
     showAdminMessage("Manual news event broadcasted!");
     manualNewsForm.reset();
 });
-
 // Player management
 async function loadPlayerData() {
     const usersRef = collection(db, `artifacts/${appId}/users`);
@@ -145,7 +143,7 @@ async function loadPlayerData() {
         const userSnapshots = await getDocs(usersRef);
         const players = [];
         for (const userDoc of userSnapshots.docs) {
-            const userData = userDoc.data(); // This contains displayName, photoURL, etc.
+            const userData = userDoc.data();
             const portfolioRef = doc(db, `artifacts/${appId}/users/${userDoc.id}/portfolio/main`);
             const portfolioSnap = await getDoc(portfolioRef);
             if (portfolioSnap.exists()) {

@@ -19,7 +19,6 @@
         <div id="loginPrompt" class="text-center mt-10"><h2 class="text-2xl font-bold text-white">Admin Authentication Required</h2><p class="mt-2 text-gray-400">Please sign in to continue.</p></div>
         
         <div id="adminContent" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Left Column -->
             <div class="space-y-6">
                 <section id="marketControls" class="bg-gray-800 p-6 rounded-lg shadow-lg">
                     <h2 class="text-2xl font-bold mb-4 text-white">Market Controls</h2>
@@ -54,6 +53,7 @@
                         <input type="text" id="sector" placeholder="Sector" required class="w-full bg-gray-700 p-2 rounded">
                         <input type="number" id="price" placeholder="Starting Price" step="0.01" required class="w-full bg-gray-700 p-2 rounded">
                         <input type="number" id="volatility" placeholder="Volatility (e.g., 1.0)" step="0.1" required class="w-full bg-gray-700 p-2 rounded">
+                        <input type="number" id="dividend" placeholder="Dividend per Share (e.g., 0.50)" step="0.01" class="w-full bg-gray-700 p-2 rounded">
                         <div class="flex space-x-4">
                             <button type="submit" id="submitButton" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Add Company</button>
                             <button type="button" id="clearButton" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Clear Form</button>
@@ -63,7 +63,6 @@
                 <section><h2 class="text-2xl font-bold mb-4 text-white">Existing Companies</h2><div id="companyList" class="space-y-3"></div></section>
             </div>
 
-            <!-- Right Column -->
             <div class="space-y-6">
                 <section id="playerManagement" class="bg-gray-800 p-6 rounded-lg shadow-lg">
                     <h2 class="text-2xl font-bold mb-4 text-white">Player Management</h2>
