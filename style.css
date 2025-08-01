@@ -4,9 +4,8 @@ body {
     background-size: 20px 20px;
 }
 
-/* Glass morphism effect for the sidebar */
 .glass-sidebar {
-    background-color: rgba(17, 24, 39, 0.5); /* gray-900 with 60% opacity */
+    background-color: rgba(17, 24, 39, 0.6); /* gray-900 with 60% opacity */
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px); /* For Safari */
     border-right: 1px solid rgba(255, 255, 255, 0.1);
