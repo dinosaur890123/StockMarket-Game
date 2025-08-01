@@ -296,13 +296,12 @@ companyList.addEventListener('click', async (e) => {
             document.getElementById('sector').value = company.sector;
             document.getElementById('price').value = company.price;
             document.getElementById('volatility').value = company.volatility;
-            document.getElementById('submitButton').textContent = 'Update Company';
+            document.getElementById('submitButton').textContent = 'Update Company Details';
             isEditing = true;
             window.scrollTo(0, 0);
         }
     }
 });
-
 companyForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const ticker = document.getElementById('ticker').value.toUpperCase();
