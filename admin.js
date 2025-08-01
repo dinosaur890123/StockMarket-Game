@@ -89,12 +89,12 @@ onSnapshot(marketDocRef, (docSnap) => {
         marketState = docSnap.data();
         tickIntervalInput.value = marketState.tick_interval_seconds;
         if (marketState.is_running) {
-            marketStatus.textContent = 'Running';
+            marketStatus.textContent = 'Status: Running';
             marketStatus.className = 'font-semibold text-green-500';
             toggleMarketBtn.textContent = 'Pause Market';
             toggleMarketBtn.className = 'bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md';
         } else {
-            marketStatus.textContent = 'Currently Paused';
+            marketStatus.textContent = 'Status: Currently Paused';
             marketStatus.className = 'font-semibold text-red-500';
             toggleMarketBtn.textContent = 'Resume Market';
             toggleMarketBtn.className = 'bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md';
