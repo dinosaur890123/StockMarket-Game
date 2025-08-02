@@ -19,6 +19,7 @@
         <div id="loginPrompt" class="text-center mt-10"><h2 class="text-2xl font-bold text-white">Admin Authentication Required</h2><p class="mt-2 text-gray-400">Please sign in to continue.</p></div>
         
         <div id="adminContent" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Left Column -->
             <div class="space-y-6">
                 <section id="marketControls" class="bg-gray-800 p-6 rounded-lg shadow-lg">
                     <h2 class="text-2xl font-bold mb-4 text-white">Market Controls</h2>
@@ -63,7 +64,17 @@
                 <section><h2 class="text-2xl font-bold mb-4 text-white">Existing Companies</h2><div id="companyList" class="space-y-3"></div></section>
             </div>
 
+            <!-- Right Column -->
             <div class="space-y-6">
+                <section id="newsManagement" class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold text-white">News Feed Management</h2>
+                        <button id="clearNewsBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md text-xs">Clear All News</button>
+                    </div>
+                    <div id="adminNewsFeed" class="space-y-3 max-h-96 overflow-y-auto">
+                        <p class="text-gray-400">Loading news...</p>
+                    </div>
+                </section>
                 <section id="playerManagement" class="bg-gray-800 p-6 rounded-lg shadow-lg">
                     <h2 class="text-2xl font-bold mb-4 text-white">Player Management</h2>
                     <div id="playerList" class="space-y-4">

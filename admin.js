@@ -1,9 +1,7 @@
-// Firebase Imports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, getDocs, addDoc, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, getDoc, updateDoc, getDocs, addDoc, serverTimestamp, increment, writeBatch, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
-// config for Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyDx1XsUhmqchGCHEiB0dcF8cV6JDCp39D0",
     authDomain: "stock-market-game-f0922.firebaseapp.com",
@@ -13,16 +11,15 @@ const firebaseConfig = {
     appId: "1:860554882495:web:c20583fed1530008b5850a",
     measurementId: "G-3V60XQ69VD"
 };
-// firebase stuff i had to copy
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 const appId = 'stock-market-game-v1';
 
-// Admin uid for access
-
 const ADMIN_UID = "XbwQTnFRrTaZ73IVHKjNXz4IaVz1";
+
 const authContainer = document.getElementById('authContainer');
 const adminContent = document.getElementById('adminContent');
 const unauthorizedMessage = document.getElementById('unauthorizedMessage');
@@ -33,21 +30,20 @@ const formTitle = document.getElementById('formTitle');
 const tickerInput = document.getElementById('ticker');
 const adminMessageBox = document.getElementById('adminMessageBox');
 const adminMessageText = document.getElementById('adminMessageText');
-// Market Controls
 const toggleMarketBtn = document.getElementById('toggleMarketBtn');
 const marketStatus = document.getElementById('marketStatus');
 const tickIntervalInput = document.getElementById('tickInterval');
 const setTickIntervalBtn = document.getElementById('setTickIntervalBtn');
-// Manual News
 const manualNewsForm = document.getElementById('manualNewsForm');
 const newsTickerSelect = document.getElementById('newsTicker');
-// Player Management
 const playerList = document.getElementById('playerList');
+const adminNewsFeed = document.getElementById('adminNewsFeed');
+const clearNewsBtn = document.getElementById('clearNewsBtn');
+
 let isEditing = false;
 let currentCompanies = {};
 let marketState = null;
 
-// Authentication
 onAuthStateChanged(auth, user => {
     if (loginPrompt) loginPrompt.classList.add('hidden');
     if (user) {
@@ -56,8 +52,8 @@ onAuthStateChanged(auth, user => {
             unauthorizedMessage.classList.add('hidden');
             authContainer.innerHTML = `<div class="flex items-center space-x-4"><p class="text-sm text-yellow-300">Admin: ${user.displayName}</p><button id="signOutButton" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></div>`;
             document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
-            // Load admin-only data
             loadPlayerData();
+            subscribeToAdminNewsFeed();
         } else {
             adminContent.classList.add('hidden');
             unauthorizedMessage.classList.remove('hidden');
@@ -82,19 +78,18 @@ const showAdminMessage = (text, isError = false) => {
     setTimeout(() => adminMessageBox.classList.add('hidden'), 3000);
 };
 
-// admin market control
 const marketDocRef = doc(db, `artifacts/${appId}/public/market`);
 onSnapshot(marketDocRef, (docSnap) => {
     if (docSnap.exists()) {
         marketState = docSnap.data();
         tickIntervalInput.value = marketState.tick_interval_seconds;
         if (marketState.is_running) {
-            marketStatus.textContent = 'Status: Running';
+            marketStatus.textContent = 'Running';
             marketStatus.className = 'font-semibold text-green-500';
             toggleMarketBtn.textContent = 'Pause Market';
             toggleMarketBtn.className = 'bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md';
         } else {
-            marketStatus.textContent = 'Status: Currently Paused';
+            marketStatus.textContent = 'Paused';
             marketStatus.className = 'font-semibold text-red-500';
             toggleMarketBtn.textContent = 'Resume Market';
             toggleMarketBtn.className = 'bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md';
@@ -110,33 +105,25 @@ setTickIntervalBtn.addEventListener('click', () => {
         updateDoc(marketDocRef, { tick_interval_seconds: newInterval });
         showAdminMessage(`Interval set to ${newInterval} seconds.`);
     } else {
-        showAdminMessage('This interval is not valid.', true);
+        showAdminMessage('Invalid interval.', true);
     }
 });
 
-// News managment
 manualNewsForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const headline = manualNewsForm.newsHeadline.value;
     const ticker = manualNewsForm.newsTicker.value;
     const impact = parseFloat(manualNewsForm.newsImpact.value);
-    if (!headline || !ticker || isNaN(impact)) {
-        return showAdminMessage("Please fill all news fields to broadcast a news event.", true);
-    }
+    if (!headline || !ticker || isNaN(impact)) return showAdminMessage("Please fill all news fields.", true);
     const newsRef = collection(db, `artifacts/${appId}/public/market/news`);
     await addDoc(newsRef, {
-        headline,
-        ticker,
-        impact_percent: impact,
-        sentiment: Math.sign(impact),
-        timestamp: serverTimestamp(),
-        is_active: true,
-        source: 'manual'
+        headline, ticker, impact_percent: impact, sentiment: Math.sign(impact),
+        timestamp: serverTimestamp(), is_active: true, source: 'manual'
     });
     showAdminMessage("Manual news event broadcasted!");
     manualNewsForm.reset();
 });
-// Player management
+
 async function loadPlayerData() {
     const usersRef = collection(db, `artifacts/${appId}/users`);
     try {
@@ -168,7 +155,6 @@ function renderPlayerList(players) {
         playerList.innerHTML = '<p class="text-gray-400">No players found.</p>';
         return;
     }
-
     players.forEach(player => {
         const portfolio = player.portfolio;
         let stockValue = 0;
@@ -178,7 +164,6 @@ function renderPlayerList(players) {
             }, 0);
         }
         const netWorth = portfolio.cash + stockValue;
-
         const playerCard = document.createElement('div');
         playerCard.className = 'bg-gray-700 p-4 rounded-lg';
         playerCard.innerHTML = `
@@ -207,37 +192,27 @@ function renderPlayerList(players) {
 playerList.addEventListener('click', async (e) => {
     const userId = e.target.dataset.id;
     if (!userId) return;
-
     const portfolioRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio/main`);
-
     if (e.target.classList.contains('add-cash-btn')) {
         const amountStr = prompt(`Enter amount of cash to award to user ${userId}:`);
         const amount = parseFloat(amountStr);
         if (!isNaN(amount) && amount > 0) {
-            await updateDoc(portfolioRef, {
-                cash: increment(amount)
-            });
+            await updateDoc(portfolioRef, { cash: increment(amount) });
             showAdminMessage(`Awarded $${amount} to user.`);
-            loadPlayerData(); 
+            loadPlayerData();
         } else {
             showAdminMessage("Invalid amount.", true);
         }
     }
-
     if (e.target.classList.contains('reset-btn')) {
         if (confirm(`Are you sure you want to reset user ${userId}'s account? This is irreversible.`)) {
-            await setDoc(portfolioRef, {
-                cash: 20000,
-                stocks: {}
-            });
+            await setDoc(portfolioRef, { cash: 20000, stocks: {} });
             showAdminMessage(`User ${userId} has been reset.`);
             loadPlayerData();
         }
     }
 });
 
-
-// Company management
 const stocksCollectionRef = collection(db, `artifacts/${appId}/public/market/stocks`);
 onSnapshot(stocksCollectionRef, (snapshot) => {
     let companies = {};
@@ -251,7 +226,7 @@ onSnapshot(stocksCollectionRef, (snapshot) => {
     });
     currentCompanies = companies;
     renderCompanyList(companies);
-    if (auth.currentUser?.uid === ADMIN_UID) loadPlayerData(); // Refresh player net worths when prices change
+    if (auth.currentUser?.uid === ADMIN_UID) loadPlayerData();
 }, (error) => {
     console.error("Firestore read error:", error);
     showAdminMessage("Could not load company data.", true);
@@ -268,7 +243,17 @@ function renderCompanyList(companies) {
         const company = companies[ticker];
         const div = document.createElement('div');
         div.className = 'bg-gray-700 p-4 rounded-lg flex justify-between items-center';
-        div.innerHTML = `<div><p class="font-bold text-lg text-white">${company.name} (${ticker})</p><p class="text-sm text-gray-400">Sector: ${company.sector} | Price: $${company.price.toFixed(2)} | Vol: ${company.volatility}</p></div><div class="space-x-2"><button data-ticker="${ticker}" class="edit-btn bg-yellow-500 p-2 rounded">Edit</button><button data-ticker="${ticker}" class="delete-btn bg-red-600 p-2 rounded">Delete</button></div>`;
+        div.innerHTML = `
+            <div>
+                <p class="font-bold text-lg text-white">${company.name} (${ticker})</p>
+                <p class="text-sm text-gray-400">
+                    Sector: ${company.sector} | Price: $${company.price.toFixed(2)} | Vol: ${company.volatility} | Div: $${(company.dividend || 0).toFixed(2)}
+                </p>
+            </div>
+            <div class="space-x-2">
+                <button data-ticker="${ticker}" class="edit-btn bg-yellow-500 p-2 rounded">Edit</button>
+                <button data-ticker="${ticker}" class="delete-btn bg-red-600 p-2 rounded">Delete</button>
+            </div>`;
         companyListEl.appendChild(div);
     });
 }
@@ -276,16 +261,13 @@ function renderCompanyList(companies) {
 companyList.addEventListener('click', async (e) => {
     const ticker = e.target.dataset.ticker;
     if (!ticker) return;
-    
     const stockRef = doc(db, `artifacts/${appId}/public/market/stocks`, ticker);
-
     if (e.target.classList.contains('delete-btn')) {
         if (confirm(`Are you sure you want to delete ${ticker}?`)) {
             await deleteDoc(stockRef);
             showAdminMessage(`${ticker} deleted.`);
         }
     }
-    
     if (e.target.classList.contains('edit-btn')) {
         const company = currentCompanies[ticker];
         if (company) {
@@ -296,12 +278,14 @@ companyList.addEventListener('click', async (e) => {
             document.getElementById('sector').value = company.sector;
             document.getElementById('price').value = company.price;
             document.getElementById('volatility').value = company.volatility;
-            document.getElementById('submitButton').textContent = 'Update Company Details';
+            document.getElementById('dividend').value = company.dividend || 0;
+            document.getElementById('submitButton').textContent = 'Update Company';
             isEditing = true;
             window.scrollTo(0, 0);
         }
     }
 });
+
 companyForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const ticker = document.getElementById('ticker').value.toUpperCase();
@@ -309,18 +293,16 @@ companyForm.addEventListener('submit', async (e) => {
     const sector = document.getElementById('sector').value;
     const price = parseFloat(document.getElementById('price').value);
     const volatility = parseFloat(document.getElementById('volatility').value);
+    const dividend = parseFloat(document.getElementById('dividend').value) || 0;
     if (!ticker || !name || !sector || isNaN(price) || isNaN(volatility)) return showAdminMessage("Please fill out all fields.", true);
-    
     const stockRef = doc(db, `artifacts/${appId}/public/market/stocks`, ticker);
-    
     let companyData;
     if (isEditing) {
         const existingData = currentCompanies[ticker];
-        companyData = { ...existingData, name, sector, price, volatility };
+        companyData = { ...existingData, name, sector, price, volatility, dividend };
     } else {
-        companyData = { name, sector, price, volatility, history: [price] };
+        companyData = { name, sector, price, volatility, dividend, history: [price] };
     }
-    
     await setDoc(stockRef, companyData, { merge: true });
     showAdminMessage(`Company ${ticker} saved!`);
     clearForm();
@@ -333,3 +315,41 @@ function clearForm() {
     isEditing = false;
 };
 document.getElementById('clearButton').addEventListener('click', clearForm);
+
+function subscribeToAdminNewsFeed() {
+    const newsRef = collection(db, `artifacts/${appId}/public/market/news`);
+    const q = query(newsRef, orderBy("timestamp", "desc"), limit(20));
+    onSnapshot(q, (snapshot) => {
+        adminNewsFeed.innerHTML = '';
+        if (snapshot.empty) {
+            adminNewsFeed.innerHTML = '<p class="text-gray-400">No news found.</p>';
+            return;
+        }
+        snapshot.docs.forEach(doc => {
+            const news = doc.data();
+            const div = document.createElement('div');
+            const sentimentColor = news.sentiment > 0 ? 'border-green-500' : 'border-red-500';
+            div.className = `border-l-4 p-2 ${sentimentColor} bg-gray-700 rounded`;
+            div.innerHTML = `<p class="text-sm text-gray-300">${news.headline}</p><p class="text-xs text-gray-500">${new Date(news.timestamp.seconds * 1000).toLocaleString()}</p>`;
+            adminNewsFeed.appendChild(div);
+        });
+    });
+}
+
+clearNewsBtn.addEventListener('click', async () => {
+    if (!confirm("Are you sure you want to delete ALL news articles? This cannot be undone.")) {
+        return;
+    }
+    const newsRef = collection(db, `artifacts/${appId}/public/market/news`);
+    const snapshot = await getDocs(newsRef);
+    if (snapshot.empty) {
+        showAdminMessage("There is no news to clear.");
+        return;
+    }
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+    });
+    await batch.commit();
+    showAdminMessage("All news has been cleared.");
+});
