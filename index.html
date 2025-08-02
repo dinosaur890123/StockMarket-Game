@@ -20,6 +20,10 @@
                     <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
                     Dashboard
                 </a>
+                <a href="#" id="navPortfolio" class="nav-link">
+                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Portfolio
+                </a>
                 <a href="#" id="navTrade" class="nav-link active">
                     <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
                     Trade
@@ -82,16 +86,18 @@
                     </div>
                 </div>
             </main>
+            <main id="portfolioPage" class="hidden"></main>
             <main id="tradePage"></main>
             <main id="ordersPage" class="hidden"></main>
             <main id="leaderboardPage" class="hidden"></main>
             <main id="achievementsPage" class="hidden"></main>
             <main id="helpPage" class="hidden prose prose-invert max-w-none bg-gray-800 p-6 rounded-lg">
-                <h2>Tutorial: How to Play</h2>
+                <h2>How to Play</h2>
                 <p>Welcome to the Stock Market Simulator! The goal is to grow your net worth by buying and selling stocks in a dynamic, live market.</p>
                 
                 <h3>The Market</h3>
-                <p>The market is constantly changing, both randomly and based off people. Stock prices update every few seconds based on their volatility, AI-generated news, and events triggered by the game admin. Keep an eye on the news feed on your dashboard for clues about what might happen next!</p>
+                <p>The market is constantly changing. Stock prices update every few seconds based on their volatility, AI-generated news, and events triggered by the game admin. Keep an eye on the news feed on your dashboard for clues about what might happen next!</p>
+
                 <h3>Order Types</h3>
                 <ul>
                     <li><strong>Market Order:</strong> The simplest way to trade. A market order buys or sells a stock at the best available current price. It's fast, but the price might change slightly from what you see on the screen.</li>
@@ -99,7 +105,7 @@
                     <li><strong>Stop Loss:</strong> A defensive order to protect your profits or limit your losses. You set a "trigger price" below the current price. If the stock falls to that price, it automatically turns into a market sell order.</li>
                 </ul>
 
-                <h3>New Features added recently: Realism and Achievements</h3>
+                <h3>New Features: Realism</h3>
                 <ul>
                     <li><strong>Transaction Costs:</strong> Every time you buy or sell stock, a flat <strong>$5.00 fee</strong> is deducted from your cash. This simulates real-world brokerage fees and means you need to make sure your trades are profitable enough to cover the cost.</li>
                     <li><strong>Dividends:</strong> Some companies will periodically pay dividends. If you own shares in a company when it pays a dividend, you will automatically receive a cash payment in your account for each share you own. This rewards long-term holding of valuable stocks. You'll see a pop-up message when you receive a dividend payment.</li>
@@ -110,7 +116,7 @@
                     <li><strong>Watch the News:</strong> The AI and admin-generated news events are the biggest drivers of large price swings. Reacting quickly to news is a key strategy.</li>
                     <li><strong>Diversify:</strong> Don't put all your money into one stock. Spreading your investments across different sectors can protect you if one company or sector has a downturn.</li>
                     <li><strong>Use Limit Orders:</strong> For volatile stocks, using a limit order can help you avoid paying more than you intended.</li>
-                    <li><strong>Protect Yourself:</strong> Use stop-loss orders on your most valuable stocks to prevent a surprise crash from wiping out your gains.</li>
+                    <li><strong>Protect Yourself:</strong> Use stop-loss orders on your valuable stocks to prevent a surprise crash from wiping out your gains.</li>
                 </ul>
             </main>
             <main id="stockDetailPage" class="hidden"></main>
