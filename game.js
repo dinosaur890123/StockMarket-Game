@@ -43,11 +43,13 @@ const stockDetailPage = document.getElementById('stockDetailPage');
 const leaderboardPage = document.getElementById('leaderboardPage');
 const helpPage = document.getElementById('helpPage');
 const achievementsPage = document.getElementById('achievementsPage');
+const portfolioPage = document.getElementById('portfolioPage');
 const newsFeedContainer = document.getElementById('newsFeedContainer');
 const messageBox = document.getElementById('messageBox');
 const messageText = document.getElementById('messageText');
 const navLinks = {
     dashboard: document.getElementById('navDashboard'),
+    portfolio: document.getElementById('navPortfolio'),
     trade: document.getElementById('navTrade'),
     orders: document.getElementById('navOrders'),
     leaderboard: document.getElementById('navLeaderboard'),
@@ -70,6 +72,7 @@ let newsUnsubscribe = null;
 let notificationsUnsubscribe = null;
 let marketDataUnsubscribe = null;
 let activeChart = null;
+let portfolioChart = null;
 let marketState = null;
 let marketUpdateInterval = null;
 
@@ -82,7 +85,7 @@ const showMessage = (text, isError = false) => {
 };
 
 const showPage = (pageId) => {
-    [dashboardPage, tradePage, ordersPage, stockDetailPage, leaderboardPage, helpPage, achievementsPage].forEach(p => p.classList.add('hidden'));
+    [dashboardPage, tradePage, ordersPage, stockDetailPage, leaderboardPage, helpPage, achievementsPage, portfolioPage].forEach(p => p.classList.add('hidden'));
     const pageElement = document.getElementById(pageId);
     if (pageElement) pageElement.classList.remove('hidden');
     Object.values(navLinks).forEach(link => link.classList.remove('active'));
@@ -90,6 +93,7 @@ const showPage = (pageId) => {
     if(activeLink) activeLink.classList.add('active');
     
     if (pageId === 'dashboardPage') pageTitle.textContent = 'Dashboard';
+    if (pageId === 'portfolioPage') pageTitle.textContent = 'My Portfolio';
     if (pageId === 'tradePage') pageTitle.textContent = 'Trade';
     if (pageId === 'ordersPage') pageTitle.textContent = 'My Orders';
     if (pageId === 'leaderboardPage') pageTitle.textContent = 'Leaderboard';
@@ -347,6 +351,7 @@ const subscribeToPortfolio = (user) => {
             updatePortfolioValue();
             checkAndUnlockAchievements();
             renderAchievementsPage();
+            renderPortfolioPage();
         }
     });
 };
@@ -397,7 +402,7 @@ const executeSpecialOrder = async (order) => {
 
 const updatePortfolioValue = () => {
     if (!userPortfolio) return;
-    let stockValue = Object.keys(userPortfolio.stocks).reduce((acc, ticker) => {
+    let stockValue = Object.keys(userPortfolio.stocks || {}).reduce((acc, ticker) => {
         return acc + ((userPortfolio.stocks[ticker] || 0) * (stockData[ticker]?.price || 0));
     }, 0);
     headerCash.textContent = `$${userPortfolio.cash.toFixed(2)}`;
@@ -607,4 +612,76 @@ const renderAchievementsPage = () => {
         `;
         container.appendChild(card);
     }
+};
+
+const renderPortfolioPage = () => {
+    if (!userPortfolio) return;
+    portfolioPage.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-bold text-white mb-4">My Holdings</h2>
+                <div id="holdingsList" class="space-y-3"></div>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-bold text-white mb-4">Asset Allocation</h2>
+                <div class="h-64"><canvas id="portfolioChart"></canvas></div>
+            </div>
+        </div>
+    `;
+
+    const holdingsList = document.getElementById('holdingsList');
+    const ownedStocks = userPortfolio.stocks || {};
+    holdingsList.innerHTML = '';
+
+    if (Object.keys(ownedStocks).length === 0) {
+        holdingsList.innerHTML = '<p class="text-gray-400">You do not own any stocks. Go to the Trade page to buy some!</p>';
+    }
+
+    const chartLabels = ['Cash'];
+    const chartData = [userPortfolio.cash];
+
+    for (const ticker in ownedStocks) {
+        const stock = stockData[ticker];
+        if (stock) {
+            const quantity = ownedStocks[ticker];
+            const value = quantity * stock.price;
+            chartLabels.push(ticker);
+            chartData.push(value);
+
+            const div = document.createElement('div');
+            div.className = 'bg-gray-700 p-4 rounded-lg flex justify-between items-center';
+            div.innerHTML = `
+                <div>
+                    <p class="font-bold text-white">${stock.name} (${ticker})</p>
+                    <p class="text-sm text-gray-400">${quantity} shares @ $${stock.price.toFixed(2)}</p>
+                </div>
+                <p class="text-lg font-semibold text-white">$${value.toFixed(2)}</p>
+            `;
+            holdingsList.appendChild(div);
+        }
+    }
+
+    const canvas = document.getElementById('portfolioChart');
+    if (portfolioChart) portfolioChart.destroy();
+    portfolioChart = new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: chartLabels,
+            datasets: [{
+                data: chartData,
+                backgroundColor: ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899', '#6366F1'],
+                borderColor: '#1f2937',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: '#9ca3af' }
+                }
+            }
+        }
+    });
 };
