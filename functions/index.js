@@ -40,7 +40,7 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
                 const headline = await generateHeadline(companies, aiSettings);
                 const analysis = await analyzeHeadline(headline, companies, aiSettings);
                 // write to pending news for admin approval
-                await db.collection('artifacts/stock-market-game-v1/pending/news').add({
+                await db.collection('artifacts/stock-market-game-v1/pending/market/news').add({
                     headline: headline,
                     ticker: analysis.ticker,
                     sentiment: analysis.sentiment,
@@ -49,7 +49,7 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
                     is_active: false,
                     source: 'ai'
                 });
-                logger.log('AI-generated news written to pending/news for approval.');
+                logger.log('AI-generated news written to artifacts/stock-market-game-v1/pending/market/news for approval.');
             } else {
                 logger.warn("No companies found, skipping AI news generation.");
             }
@@ -72,7 +72,7 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
                     logger.warn(`AI generated ticker ${ticker} already exists. Skipping.`);
                 } else {
                     // write to pending companies for admin approval
-                    await db.collection('artifacts/stock-market-game-v1/pending/companies').add({
+                    await db.collection('artifacts/stock-market-game-v1/pending/market/companies').add({
                         ticker: ticker,
                         name: newCompany.name,
                         sector: newCompany.sector,
@@ -81,7 +81,7 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
                         dividend: newCompany.dividend,
                         created_at: new Date()
                     });
-                    logger.log(`New company generated and written to pending/companies: ${ticker} - ${newCompany.name}`);
+                    logger.log(`New company generated and written to artifacts/stock-market-game-v1/pending/market/companies: ${ticker} - ${newCompany.name}`);
                 }
             }
         } catch (err) {
@@ -110,7 +110,7 @@ exports.processAdminAction = onDocumentCreated('artifacts/stock-market-game-v1/a
             } else {
                 const headline = await generateHeadline(companies, aiSettings);
                 const analysis = await analyzeHeadline(headline, companies, aiSettings);
-                await db.collection('artifacts/stock-market-game-v1/pending/news').add({
+                await db.collection('artifacts/stock-market-game-v1/pending/market/news').add({
                     headline: headline,
                     ticker: analysis.ticker,
                     sentiment: analysis.sentiment,
@@ -120,7 +120,7 @@ exports.processAdminAction = onDocumentCreated('artifacts/stock-market-game-v1/a
                     source: 'ai',
                     requested_by: data.requested_by || null
                 });
-                logger.log('Admin-triggered AI news written to pending/news for approval.');
+                logger.log('Admin-triggered AI news written to artifacts/stock-market-game-v1/pending/market/news for approval.');
             }
         } else if (data.type === 'generate_company') {
             const existingTickers = stocks.map(s => s.id);
@@ -129,7 +129,7 @@ exports.processAdminAction = onDocumentCreated('artifacts/stock-market-game-v1/a
             if (existingTickers.includes(ticker)) {
                 logger.warn(`AI generated ticker ${ticker} already exists. Skipping.`);
             } else {
-                await db.collection('artifacts/stock-market-game-v1/pending/companies').add({
+                await db.collection('artifacts/stock-market-game-v1/pending/market/companies').add({
                     ticker: ticker,
                     name: newCompany.name,
                     sector: newCompany.sector,
@@ -139,7 +139,7 @@ exports.processAdminAction = onDocumentCreated('artifacts/stock-market-game-v1/a
                     created_at: new Date(),
                     requested_by: data.requested_by || null
                 });
-                logger.log(`Admin-triggered new company written to pending/companies: ${ticker} - ${newCompany.name}`);
+                logger.log(`Admin-triggered new company written to artifacts/stock-market-game-v1/pending/market/companies: ${ticker} - ${newCompany.name}`);
             }
         } else {
             logger.warn('Unknown admin action type:', data.type);

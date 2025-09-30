@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Public market data: readable by anyone. Writes only allowed for admin (or server-side via Admin SDK).
+    match /artifacts/{appId}/public/{document=**} {
+      allow read: if true;
+      // Only allow writes from authenticated admin user. Server-side Cloud Functions using Admin SDK bypass rules.
+      allow create, update, delete: if request.auth != null && request.auth.uid == 'XbwQTnFRrTaZ73IVHKjNXz4IaVz1';
+    }
+
+    // Admin action requests: only the admin user may create/list/read these docs (used to trigger server processing).
+    match /artifacts/{appId}/admin_actions/{docId} {
+      allow create: if request.auth != null && request.auth.uid == 'XbwQTnFRrTaZ73IVHKjNXz4IaVz1';
+      allow read, list: if request.auth != null && request.auth.uid == 'XbwQTnFRrTaZ73IVHKjNXz4IaVz1';
+      // Prevent client updates/deletes to keep audit trail intact; server may update processed flag via Admin SDK.
+      allow update, delete: if false;
+    }
+
+    // Pending items: only admin can read/write pending preview items in the UI.
+    match /artifacts/{appId}/pending/{path=**} {
+      allow read, create, update, delete: if request.auth != null && request.auth.uid == 'XbwQTnFRrTaZ73IVHKjNXz4IaVz1';
+    }
+
+    // Per-user data: users can read/write their own subcollections. Admin can also access.
+    match /artifacts/{appId}/users/{userId}/{path=**} {
+      allow read, write: if request.auth != null && (request.auth.uid == userId || request.auth.uid == 'XbwQTnFRrTaZ73IVHKjNXz4IaVz1');
+    }
+
+    // Allow listing users only to admin
+    match /artifacts/{appId}/users/{userId} {
+      allow list: if request.auth != null && request.auth.uid == 'XbwQTnFRrTaZ73IVHKjNXz4IaVz1';
+    }
+
+    // Default deny-all for any other paths not explicitly matched above
+    match /{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}
