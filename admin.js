@@ -62,6 +62,7 @@ onAuthStateChanged(auth, user => {
             document.getElementById('signOutButton').addEventListener('click', () => signOut(auth));
             loadPlayerData();
             subscribeToAdminNewsFeed();
+            subscribeToPendingItems();
         } else {
             adminContent.classList.add('hidden');
             unauthorizedMessage.classList.remove('hidden');
@@ -395,6 +396,82 @@ function subscribeToAdminNewsFeed() {
         });
     });
 }
+
+// Subscribe to pending AI news and pending company listings for preview/approval
+function subscribeToPendingItems() {
+    const pendingNewsRef = collection(db, `artifacts/${appId}/pending/news`);
+    onSnapshot(pendingNewsRef, (snapshot) => {
+        const container = document.getElementById('pendingNewsFeed');
+        container.innerHTML = '';
+        if (snapshot.empty) {
+            container.innerHTML = '<p class="text-gray-400">No pending AI news.</p>';
+            return;
+        }
+        snapshot.docs.forEach(doc => {
+            const item = doc.data();
+            const div = document.createElement('div');
+            div.className = 'bg-gray-800 p-3 rounded flex justify-between items-start';
+            div.innerHTML = `<div><p class="text-sm text-gray-300">${item.headline}</p><p class="text-xs text-gray-500">Target: ${item.ticker || 'N/A'}</p></div><div class="space-x-2"><button data-id="${doc.id}" class="approve-news-btn bg-green-600 p-2 rounded text-xs">Approve</button><button data-id="${doc.id}" class="reject-news-btn bg-red-600 p-2 rounded text-xs">Reject</button></div>`;
+            container.appendChild(div);
+        });
+    });
+
+    const pendingCompaniesRef = collection(db, `artifacts/${appId}/pending/companies`);
+    const companiesContainer = document.createElement('div');
+    companiesContainer.id = 'pendingCompaniesFeed';
+    companiesContainer.className = 'space-y-3 max-h-48 overflow-y-auto bg-gray-800 p-3 rounded mt-3';
+    document.getElementById('newsManagement').appendChild(companiesContainer);
+    onSnapshot(pendingCompaniesRef, (snapshot) => {
+        companiesContainer.innerHTML = '<h4 class="text-sm font-semibold text-white">Pending Companies</h4>';
+        if (snapshot.empty) {
+            companiesContainer.innerHTML += '<p class="text-gray-400">No pending companies.</p>';
+            return;
+        }
+        snapshot.docs.forEach(doc => {
+            const c = doc.data();
+            const div = document.createElement('div');
+            div.className = 'bg-gray-700 p-3 rounded flex justify-between items-start';
+            div.innerHTML = `<div><p class="font-bold text-white">${c.name} (${c.ticker})</p><p class="text-sm text-gray-400">Sector: ${c.sector} | Price: $${(c.price||0).toFixed(2)} | Vol: ${c.volatility} | Div: $${(c.dividend||0).toFixed(2)}</p></div><div class="space-x-2"><button data-id="${doc.id}" class="approve-company-btn bg-green-600 p-2 rounded text-xs">Approve</button><button data-id="${doc.id}" class="reject-company-btn bg-red-600 p-2 rounded text-xs">Reject</button></div>`;
+            companiesContainer.appendChild(div);
+        });
+    });
+}
+
+// Handle approve/reject clicks (event delegation)
+document.addEventListener('click', async (e) => {
+    if (e.target.classList.contains('approve-news-btn')) {
+        const id = e.target.dataset.id;
+        const pendingRef = doc(db, `artifacts/${appId}/pending/news`, id);
+        const snap = await getDoc(pendingRef);
+        if (!snap.exists()) return showAdminMessage('Pending item not found.', true);
+        const item = snap.data();
+        // publish to news
+        await addDoc(collection(db, `artifacts/${appId}/public/market/news`), { ...item, timestamp: serverTimestamp(), is_active: true, source: 'ai' });
+        await deleteDoc(pendingRef);
+        showAdminMessage('News approved and published.');
+    }
+    if (e.target.classList.contains('reject-news-btn')) {
+        const id = e.target.dataset.id;
+        await deleteDoc(doc(db, `artifacts/${appId}/pending/news`, id));
+        showAdminMessage('News rejected and removed.');
+    }
+    if (e.target.classList.contains('approve-company-btn')) {
+        const id = e.target.dataset.id;
+        const pendingRef = doc(db, `artifacts/${appId}/pending/companies`, id);
+        const snap = await getDoc(pendingRef);
+        if (!snap.exists()) return showAdminMessage('Pending company not found.', true);
+        const c = snap.data();
+        const stockRef = doc(db, `artifacts/${appId}/public/market/stocks`, c.ticker);
+        await setDoc(stockRef, { name: c.name, sector: c.sector, price: c.price, volatility: c.volatility, dividend: c.dividend, created_at: serverTimestamp(), last_updated: serverTimestamp(), history: [c.price] });
+        await deleteDoc(pendingRef);
+        showAdminMessage('Company approved and listed.');
+    }
+    if (e.target.classList.contains('reject-company-btn')) {
+        const id = e.target.dataset.id;
+        await deleteDoc(doc(db, `artifacts/${appId}/pending/companies`, id));
+        showAdminMessage('Company rejected and removed.');
+    }
+});
 
 clearNewsBtn.addEventListener('click', async () => {
     if (!confirm("Are you sure you want to delete ALL news articles? This cannot be undone.")) {

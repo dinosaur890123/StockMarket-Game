@@ -301,7 +301,9 @@ const renderNewsFeed = () => {
         const div = document.createElement('div');
         const sentimentColor = news.sentiment > 0 ? 'border-green-500' : 'border-red-500';
         div.className = `border-l-4 p-2 ${sentimentColor}`;
-        div.innerHTML = `<p class="text-sm text-gray-300">${news.headline}</p><p class="text-xs text-gray-500">${new Date(news.timestamp.seconds * 1000).toLocaleTimeString()}</p>`;
+        const companyName = stockData[news.ticker]?.name || '';
+        const targetLine = news.ticker ? `<span class="text-xs text-blue-300 font-mono">${news.ticker}${companyName ? ' - ' + companyName : ''}</span>` : '';
+        div.innerHTML = `<p class="text-sm text-gray-300">${news.headline}</p><div class="flex justify-between items-center"><div>${targetLine}</div><p class="text-xs text-gray-500">${new Date(news.timestamp.seconds * 1000).toLocaleTimeString()}</p></div>`;
         newsFeedContainer.appendChild(div);
     });
 };
