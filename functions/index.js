@@ -14,7 +14,7 @@ const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 
 // NOTE: API key embedded in code per project owner's request.
 // This is insecure for public repos; consider using environment variables or Secret Manager.
-const EMBEDDED_GEMINI_API_KEY = 'AIzaSyDuimVRJmZPt-jKEtkvqBNFM7B6S5nmSSU';
+const EMBEDDED_GEMINI_API_KEY = 'AIzaSyBE6IV3k-aU87duL97KIDuI4QHWo0d1sjM';
 
 exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
     logger.log("Game Update Ticker starting...");
