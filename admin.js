@@ -40,6 +40,8 @@ const analysisTempInput = document.getElementById('analysisTemp');
 const companyTempInput = document.getElementById('companyTemp');
 const companyMaxTokensInput = document.getElementById('companyMaxTokens');
 const saveAiSettingsBtn = document.getElementById('saveAiSettingsBtn');
+const generateAiNewsBtn = document.getElementById('generateAiNewsBtn');
+const generateCompanyBtn = document.getElementById('generateCompanyBtn');
 const manualNewsForm = document.getElementById('manualNewsForm');
 const newsTickerSelect = document.getElementById('newsTicker');
 const playerList = document.getElementById('playerList');
@@ -140,6 +142,30 @@ saveAiSettingsBtn.addEventListener('click', async () => {
     } catch (err) {
         console.error('Failed to save AI settings', err);
         showAdminMessage('Failed to save AI settings.', true);
+    }
+});
+
+generateAiNewsBtn.addEventListener('click', async () => {
+    if (!confirm('Generate AI news now? This will request the server to generate and broadcast a new headline.')) return;
+    try {
+        const actionsRef = collection(db, `artifacts/${appId}/admin_actions`);
+        await addDoc(actionsRef, { type: 'generate_news', requested_by: auth.currentUser?.uid || null, timestamp: serverTimestamp() });
+        showAdminMessage('AI news generation requested.');
+    } catch (err) {
+        console.error('Failed to request AI news generation', err);
+        showAdminMessage('Failed to request AI news generation.', true);
+    }
+});
+
+generateCompanyBtn.addEventListener('click', async () => {
+    if (!confirm('Generate new company now? This will request the server to create a new company listing.')) return;
+    try {
+        const actionsRef = collection(db, `artifacts/${appId}/admin_actions`);
+        await addDoc(actionsRef, { type: 'generate_company', requested_by: auth.currentUser?.uid || null, timestamp: serverTimestamp() });
+        showAdminMessage('AI company generation requested.');
+    } catch (err) {
+        console.error('Failed to request AI company generation', err);
+        showAdminMessage('Failed to request AI company generation.', true);
     }
 });
 

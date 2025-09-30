@@ -10,6 +10,8 @@ initializeApp();
 const db = getFirestore();
 const auth = getAuth();
 
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+
 // NOTE: API key embedded in code per project owner's request.
 // This is insecure for public repos; consider using environment variables or Secret Manager.
 const EMBEDDED_GEMINI_API_KEY = 'AIzaSyDuimVRJmZPt-jKEtkvqBNFM7B6S5nmSSU';
@@ -81,6 +83,59 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
 
     } catch (error) {
         logger.error("Error in Game Update Ticker:", error);
+    }
+});
+
+// Firestore trigger: process admin action requests
+exports.processAdminAction = onDocumentCreated('artifacts/stock-market-game-v1/admin_actions/{docId}', async (event) => {
+    const data = event.data;
+    const id = event.params.docId;
+    logger.log(`Processing admin action ${id}:`, data);
+    try {
+        const marketDoc = await db.doc('artifacts/stock-market-game-v1/public/market').get();
+        const aiSettings = marketDoc.exists ? (marketDoc.data().ai_settings || {}) : {};
+        const stocks = await getStocks();
+        const companies = stocks.map(s => ({ ticker: s.id, ...s.data }));
+
+        if (data.type === 'generate_news') {
+            if (companies.length === 0) {
+                logger.warn('No companies to generate news for.');
+            } else {
+                const headline = await generateHeadline(companies, aiSettings);
+                const analysis = await analyzeHeadline(headline, companies, aiSettings);
+                await saveNews(headline, analysis);
+                logger.log('Admin-triggered AI news generated and saved.');
+            }
+        } else if (data.type === 'generate_company') {
+            const existingTickers = stocks.map(s => s.id);
+            const newCompany = await generateCompanyListing(existingTickers, aiSettings);
+            const ticker = newCompany.ticker;
+            if (existingTickers.includes(ticker)) {
+                logger.warn(`AI generated ticker ${ticker} already exists. Skipping.`);
+            } else {
+                const stockRef = db.collection('artifacts/stock-market-game-v1/public/market/stocks').doc(ticker);
+                await stockRef.set({
+                    name: newCompany.name,
+                    sector: newCompany.sector,
+                    price: newCompany.price,
+                    volatility: newCompany.volatility,
+                    dividend: newCompany.dividend,
+                    created_at: new Date(),
+                    last_updated: new Date(),
+                    history: [newCompany.price]
+                }, { merge: false });
+                logger.log(`Admin-triggered new company listed: ${ticker} - ${newCompany.name}`);
+            }
+        } else {
+            logger.warn('Unknown admin action type:', data.type);
+        }
+
+        // mark action as processed
+        const actionRef = db.doc(`artifacts/stock-market-game-v1/admin_actions/${id}`);
+        await actionRef.update({ processed: true, processed_at: new Date() });
+    } catch (err) {
+        logger.error('Error processing admin action:', err);
+        try { await db.doc(`artifacts/stock-market-game-v1/admin_actions/${id}`).update({ error: String(err) }); } catch (e) { logger.error('Failed to write error to action doc', e); }
     }
 });
 
