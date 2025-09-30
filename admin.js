@@ -149,9 +149,10 @@ saveAiSettingsBtn.addEventListener('click', async () => {
 generateAiNewsBtn.addEventListener('click', async () => {
     if (!confirm('Generate AI news now? This will request the server to generate and broadcast a new headline.')) return;
     try {
-        const actionsRef = collection(db, `artifacts/${appId}/admin_actions`);
-        await addDoc(actionsRef, { type: 'generate_news', requested_by: auth.currentUser?.uid || null, timestamp: serverTimestamp() });
-        showAdminMessage('AI news generation requested.');
+        const actionsRef = collection(db, 'artifacts', appId, 'admin_actions');
+        const docRef = await addDoc(actionsRef, { type: 'generate_news', requested_by: auth.currentUser?.uid || null, timestamp: serverTimestamp() });
+        console.log('Admin action created:', docRef.id);
+        showAdminMessage(`AI news generation requested. Action id: ${docRef.id}`);
     } catch (err) {
         console.error('Failed to request AI news generation', err);
         showAdminMessage('Failed to request AI news generation.', true);
@@ -161,9 +162,10 @@ generateAiNewsBtn.addEventListener('click', async () => {
 generateCompanyBtn.addEventListener('click', async () => {
     if (!confirm('Generate new company now? This will request the server to create a new company listing.')) return;
     try {
-        const actionsRef = collection(db, `artifacts/${appId}/admin_actions`);
-        await addDoc(actionsRef, { type: 'generate_company', requested_by: auth.currentUser?.uid || null, timestamp: serverTimestamp() });
-        showAdminMessage('AI company generation requested.');
+        const actionsRef = collection(db, 'artifacts', appId, 'admin_actions');
+        const docRef = await addDoc(actionsRef, { type: 'generate_company', requested_by: auth.currentUser?.uid || null, timestamp: serverTimestamp() });
+        console.log('Admin action created:', docRef.id);
+        showAdminMessage(`AI company generation requested. Action id: ${docRef.id}`);
     } catch (err) {
         console.error('Failed to request AI company generation', err);
         showAdminMessage('Failed to request AI company generation.', true);
