@@ -40,7 +40,7 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
                 const headline = await generateHeadline(companies, aiSettings);
                 const analysis = await analyzeHeadline(headline, companies, aiSettings);
                 // write to pending news for admin approval
-                await db.collection('artifacts/stock-market-game-v1/pending/market/news').add({
+                await db.collection('artifacts').doc('stock-market-game-v1').collection('pending').doc('market').collection('news').add({
                     headline: headline,
                     ticker: analysis.ticker,
                     sentiment: analysis.sentiment,
@@ -72,7 +72,7 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
                     logger.warn(`AI generated ticker ${ticker} already exists. Skipping.`);
                 } else {
                     // write to pending companies for admin approval
-                    await db.collection('artifacts/stock-market-game-v1/pending/market/companies').add({
+                    await db.collection('artifacts').doc('stock-market-game-v1').collection('pending').doc('market').collection('companies').add({
                         ticker: ticker,
                         name: newCompany.name,
                         sector: newCompany.sector,
@@ -110,7 +110,7 @@ exports.processAdminAction = onDocumentCreated('artifacts/stock-market-game-v1/a
             } else {
                 const headline = await generateHeadline(companies, aiSettings);
                 const analysis = await analyzeHeadline(headline, companies, aiSettings);
-                await db.collection('artifacts/stock-market-game-v1/pending/market/news').add({
+                await db.collection('artifacts').doc('stock-market-game-v1').collection('pending').doc('market').collection('news').add({
                     headline: headline,
                     ticker: analysis.ticker,
                     sentiment: analysis.sentiment,
@@ -129,7 +129,7 @@ exports.processAdminAction = onDocumentCreated('artifacts/stock-market-game-v1/a
             if (existingTickers.includes(ticker)) {
                 logger.warn(`AI generated ticker ${ticker} already exists. Skipping.`);
             } else {
-                await db.collection('artifacts/stock-market-game-v1/pending/market/companies').add({
+                await db.collection('artifacts').doc('stock-market-game-v1').collection('pending').doc('market').collection('companies').add({
                     ticker: ticker,
                     name: newCompany.name,
                     sector: newCompany.sector,

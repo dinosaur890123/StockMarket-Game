@@ -399,7 +399,7 @@ function subscribeToAdminNewsFeed() {
 
 // Subscribe to pending AI news and pending company listings for preview/approval
 function subscribeToPendingItems() {
-    const pendingNewsRef = collection(db, `artifacts/${appId}/pending/market/news`);
+    const pendingNewsRef = collection(db, 'artifacts', appId, 'pending', 'market', 'news');
     onSnapshot(pendingNewsRef, (snapshot) => {
         const container = document.getElementById('pendingNewsFeed');
         container.innerHTML = '';
@@ -416,7 +416,7 @@ function subscribeToPendingItems() {
         });
     });
 
-    const pendingCompaniesRef = collection(db, `artifacts/${appId}/pending/market/companies`);
+    const pendingCompaniesRef = collection(db, 'artifacts', appId, 'pending', 'market', 'companies');
     const companiesContainer = document.createElement('div');
     companiesContainer.id = 'pendingCompaniesFeed';
     companiesContainer.className = 'space-y-3 max-h-48 overflow-y-auto bg-gray-800 p-3 rounded mt-3';
@@ -441,7 +441,7 @@ function subscribeToPendingItems() {
 document.addEventListener('click', async (e) => {
     if (e.target.classList.contains('approve-news-btn')) {
         const id = e.target.dataset.id;
-        const pendingRef = doc(db, `artifacts/${appId}/pending/market/news`, id);
+    const pendingRef = doc(db, 'artifacts', appId, 'pending', 'market', 'news', id);
         const snap = await getDoc(pendingRef);
         if (!snap.exists()) return showAdminMessage('Pending item not found.', true);
         const item = snap.data();
@@ -452,12 +452,12 @@ document.addEventListener('click', async (e) => {
     }
     if (e.target.classList.contains('reject-news-btn')) {
         const id = e.target.dataset.id;
-        await deleteDoc(doc(db, `artifacts/${appId}/pending/market/news`, id));
+    await deleteDoc(doc(db, 'artifacts', appId, 'pending', 'market', 'news', id));
         showAdminMessage('News rejected and removed.');
     }
     if (e.target.classList.contains('approve-company-btn')) {
         const id = e.target.dataset.id;
-        const pendingRef = doc(db, `artifacts/${appId}/pending/market/companies`, id);
+    const pendingRef = doc(db, 'artifacts', appId, 'pending', 'market', 'companies', id);
         const snap = await getDoc(pendingRef);
         if (!snap.exists()) return showAdminMessage('Pending company not found.', true);
         const c = snap.data();
@@ -468,7 +468,7 @@ document.addEventListener('click', async (e) => {
     }
     if (e.target.classList.contains('reject-company-btn')) {
         const id = e.target.dataset.id;
-        await deleteDoc(doc(db, `artifacts/${appId}/pending/market/companies`, id));
+    await deleteDoc(doc(db, 'artifacts', appId, 'pending', 'market', 'companies', id));
         showAdminMessage('Company rejected and removed.');
     }
 });
