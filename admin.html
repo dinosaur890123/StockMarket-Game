@@ -27,6 +27,20 @@
                         <button id="toggleMarketBtn" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md">Resume Market</button>
                         <div class="text-gray-400">Status: <span id="marketStatus" class="font-semibold text-red-500">Paused</span></div>
                     </div>
+                        <div class="mt-4 bg-gray-700 p-4 rounded">
+                            <h3 class="text-sm font-semibold text-white">AI Settings</h3>
+                            <div class="grid grid-cols-2 gap-2 mt-2 text-sm text-gray-300">
+                                <label class="col-span-2">Listing Probability (%)<input id="listingProbability" type="number" min="0" max="100" step="1" value="10" class="w-full bg-gray-800 p-1 rounded mt-1"></label>
+                                <label>Headline Temp<input id="headlineTemp" type="number" min="0" max="1" step="0.1" value="0.9" class="w-full bg-gray-800 p-1 rounded mt-1"></label>
+                                <label>Headline Max Tokens<input id="headlineMaxTokens" type="number" min="16" max="2048" step="1" value="256" class="w-full bg-gray-800 p-1 rounded mt-1"></label>
+                                <label>Analysis Temp<input id="analysisTemp" type="number" min="0" max="1" step="0.1" value="0" class="w-full bg-gray-800 p-1 rounded mt-1"></label>
+                                <label>Company Temp<input id="companyTemp" type="number" min="0" max="1" step="0.1" value="0.8" class="w-full bg-gray-800 p-1 rounded mt-1"></label>
+                                <label>Company Max Tokens<input id="companyMaxTokens" type="number" min="64" max="2048" step="1" value="200" class="w-full bg-gray-800 p-1 rounded mt-1"></label>
+                            </div>
+                            <div class="mt-3">
+                                <button id="saveAiSettingsBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Save AI Settings</button>
+                            </div>
+                        </div>
                     <div class="mt-4">
                         <label for="tickInterval" class="block text-sm font-medium text-gray-300">Update Interval (seconds)</label>
                         <div class="flex items-center space-x-2 mt-1">

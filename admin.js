@@ -19,7 +19,6 @@ const provider = new GoogleAuthProvider();
 const appId = 'stock-market-game-v1';
 
 const ADMIN_UID = "XbwQTnFRrTaZ73IVHKjNXz4IaVz1";
-
 const authContainer = document.getElementById('authContainer');
 const adminContent = document.getElementById('adminContent');
 const unauthorizedMessage = document.getElementById('unauthorizedMessage');
@@ -34,6 +33,13 @@ const toggleMarketBtn = document.getElementById('toggleMarketBtn');
 const marketStatus = document.getElementById('marketStatus');
 const tickIntervalInput = document.getElementById('tickInterval');
 const setTickIntervalBtn = document.getElementById('setTickIntervalBtn');
+const listingProbabilityInput = document.getElementById('listingProbability');
+const headlineTempInput = document.getElementById('headlineTemp');
+const headlineMaxTokensInput = document.getElementById('headlineMaxTokens');
+const analysisTempInput = document.getElementById('analysisTemp');
+const companyTempInput = document.getElementById('companyTemp');
+const companyMaxTokensInput = document.getElementById('companyMaxTokens');
+const saveAiSettingsBtn = document.getElementById('saveAiSettingsBtn');
 const manualNewsForm = document.getElementById('manualNewsForm');
 const newsTickerSelect = document.getElementById('newsTicker');
 const playerList = document.getElementById('playerList');
@@ -83,19 +89,28 @@ onSnapshot(marketDocRef, (docSnap) => {
     if (docSnap.exists()) {
         marketState = docSnap.data();
         tickIntervalInput.value = marketState.tick_interval_seconds;
+        // load AI settings if present
+        const ai = marketState.ai_settings || {};
+        listingProbabilityInput.value = Math.round((ai.listing_probability || 0.1) * 100);
+        headlineTempInput.value = ai.headline_temperature ?? 0.9;
+        headlineMaxTokensInput.value = ai.headline_max_tokens ?? 256;
+        analysisTempInput.value = ai.analysis_temperature ?? 0;
+        companyTempInput.value = ai.company_temperature ?? 0.8;
+        companyMaxTokensInput.value = ai.company_max_tokens ?? 200;
         if (marketState.is_running) {
             marketStatus.textContent = 'Running';
             marketStatus.className = 'font-semibold text-green-500';
             toggleMarketBtn.textContent = 'Pause Market';
             toggleMarketBtn.className = 'bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md';
         } else {
-            marketStatus.textContent = 'Paused';
+            marketStatus.textContent = 'Currently Paused';
             marketStatus.className = 'font-semibold text-red-500';
             toggleMarketBtn.textContent = 'Resume Market';
             toggleMarketBtn.className = 'bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md';
         }
     }
 });
+
 toggleMarketBtn.addEventListener('click', () => {
     if (marketState) updateDoc(marketDocRef, { is_running: !marketState.is_running });
 });
@@ -106,6 +121,25 @@ setTickIntervalBtn.addEventListener('click', () => {
         showAdminMessage(`Interval set to ${newInterval} seconds.`);
     } else {
         showAdminMessage('Invalid interval.', true);
+    }
+});
+
+saveAiSettingsBtn.addEventListener('click', async () => {
+    if (!marketState) return showAdminMessage('Market settings doc not available.', true);
+    const aiSettings = {
+        listing_probability: Math.max(0, Math.min(100, parseFloat(listingProbabilityInput.value || '10'))) / 100,
+        headline_temperature: parseFloat(headlineTempInput.value) || 0.9,
+        headline_max_tokens: parseInt(headlineMaxTokensInput.value) || 256,
+        analysis_temperature: parseFloat(analysisTempInput.value) || 0,
+        company_temperature: parseFloat(companyTempInput.value) || 0.8,
+        company_max_tokens: parseInt(companyMaxTokensInput.value) || 200,
+    };
+    try {
+        await updateDoc(marketDocRef, { ai_settings: aiSettings });
+        showAdminMessage('AI settings saved.');
+    } catch (err) {
+        console.error('Failed to save AI settings', err);
+        showAdminMessage('Failed to save AI settings.', true);
     }
 });
 
