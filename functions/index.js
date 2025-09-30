@@ -71,7 +71,6 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
                 if (existingTickers.includes(ticker)) {
                     logger.warn(`AI generated ticker ${ticker} already exists. Skipping.`);
                 } else {
-                    // write to pending companies for admin approval
                     await db.collection('artifacts').doc('stock-market-game-v1').collection('pending').doc('market').collection('companies').add({
                         ticker: ticker,
                         name: newCompany.name,
@@ -93,11 +92,9 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
     }
 });
 
-// Firestore trigger: process admin action requests
 exports.processAdminAction = onDocumentCreated('artifacts/stock-market-game-v1/admin_actions/{docId}', async (event) => {
-    const snapshot = event.data; // this is a QueryDocumentSnapshot / DocumentSnapshot
+    const snapshot = event.data; 
     const id = event.params.docId;
-    // Safely extract plain data from the snapshot
     const data = (snapshot && typeof snapshot.data === 'function') ? snapshot.data() : (snapshot || {});
     logger.log(`Processing admin action ${id}:`, data);
 
