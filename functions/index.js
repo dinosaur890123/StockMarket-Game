@@ -95,21 +95,37 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
 
 // Firestore trigger: process admin action requests
 exports.processAdminAction = onDocumentCreated('artifacts/stock-market-game-v1/admin_actions/{docId}', async (event) => {
-    const data = event.data;
+    const snapshot = event.data; // this is a QueryDocumentSnapshot / DocumentSnapshot
     const id = event.params.docId;
+    // Safely extract plain data from the snapshot
+    const data = (snapshot && typeof snapshot.data === 'function') ? snapshot.data() : (snapshot || {});
     logger.log(`Processing admin action ${id}:`, data);
+
+    const actionRef = db.doc(`artifacts/stock-market-game-v1/admin_actions/${id}`);
+    // Record that processing started
+    try {
+        await actionRef.update({ last_attempt: new Date(), last_step: 'started', last_data: data }).catch(() => null);
+    } catch (e) { /* ignore */ }
+
     try {
         const marketDoc = await db.doc('artifacts/stock-market-game-v1/public/market').get();
         const aiSettings = marketDoc.exists ? (marketDoc.data().ai_settings || {}) : {};
         const stocks = await getStocks();
         const companies = stocks.map(s => ({ ticker: s.id, ...s.data }));
 
-        if (data.type === 'generate_news') {
+        if (!data || !data.type) {
+            logger.warn('Unknown admin action type: undefined');
+            await actionRef.update({ last_step: 'unknown_type', error: 'missing type' }).catch(() => null);
+        } else if (data.type === 'generate_news') {
+            await actionRef.update({ last_step: 'generate_news_start' }).catch(() => null);
             if (companies.length === 0) {
                 logger.warn('No companies to generate news for.');
+                await actionRef.update({ last_step: 'no_companies_for_news' }).catch(() => null);
             } else {
                 const headline = await generateHeadline(companies, aiSettings);
+                await actionRef.update({ last_step: 'headline_generated' }).catch(() => null);
                 const analysis = await analyzeHeadline(headline, companies, aiSettings);
+                await actionRef.update({ last_step: 'analysis_done' }).catch(() => null);
                 await db.collection('artifacts').doc('stock-market-game-v1').collection('pending').doc('market').collection('news').add({
                     headline: headline,
                     ticker: analysis.ticker,
@@ -121,13 +137,17 @@ exports.processAdminAction = onDocumentCreated('artifacts/stock-market-game-v1/a
                     requested_by: data.requested_by || null
                 });
                 logger.log('Admin-triggered AI news written to artifacts/stock-market-game-v1/pending/market/news for approval.');
+                await actionRef.update({ last_step: 'news_written' }).catch(() => null);
             }
         } else if (data.type === 'generate_company') {
+            await actionRef.update({ last_step: 'generate_company_start' }).catch(() => null);
             const existingTickers = stocks.map(s => s.id);
             const newCompany = await generateCompanyListing(existingTickers, aiSettings);
+            await actionRef.update({ last_step: 'company_generated', generated_ticker: newCompany.ticker }).catch(() => null);
             const ticker = newCompany.ticker;
             if (existingTickers.includes(ticker)) {
                 logger.warn(`AI generated ticker ${ticker} already exists. Skipping.`);
+                await actionRef.update({ last_step: 'company_skipped_exists' }).catch(() => null);
             } else {
                 await db.collection('artifacts').doc('stock-market-game-v1').collection('pending').doc('market').collection('companies').add({
                     ticker: ticker,
@@ -140,17 +160,20 @@ exports.processAdminAction = onDocumentCreated('artifacts/stock-market-game-v1/a
                     requested_by: data.requested_by || null
                 });
                 logger.log(`Admin-triggered new company written to artifacts/stock-market-game-v1/pending/market/companies: ${ticker} - ${newCompany.name}`);
+                await actionRef.update({ last_step: 'company_written', written_ticker: ticker }).catch(() => null);
             }
         } else {
             logger.warn('Unknown admin action type:', data.type);
+            await actionRef.update({ last_step: 'unknown_type', error: `unknown type ${data.type}` }).catch(() => null);
         }
 
         // mark action as processed
-        const actionRef = db.doc(`artifacts/stock-market-game-v1/admin_actions/${id}`);
-        await actionRef.update({ processed: true, processed_at: new Date() });
+        await actionRef.update({ processed: true, processed_at: new Date(), last_step: 'finished' }).catch(() => null);
     } catch (err) {
         logger.error('Error processing admin action:', err);
-        try { await db.doc(`artifacts/stock-market-game-v1/admin_actions/${id}`).update({ error: String(err) }); } catch (e) { logger.error('Failed to write error to action doc', e); }
+        try {
+            await actionRef.update({ error: String(err), last_step: 'error' }).catch(() => null);
+        } catch (e) { logger.error('Failed to write error to action doc', e); }
     }
 });
 
