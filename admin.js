@@ -92,7 +92,6 @@ onSnapshot(marketDocRef, (docSnap) => {
     if (docSnap.exists()) {
         marketState = docSnap.data();
         tickIntervalInput.value = marketState.tick_interval_seconds;
-        // load AI settings if present
         const ai = marketState.ai_settings || {};
         listingProbabilityInput.value = Math.round((ai.listing_probability || 0.1) * 100);
         headlineTempInput.value = ai.headline_temperature ?? 0.9;
@@ -399,7 +398,6 @@ function subscribeToAdminNewsFeed() {
     });
 }
 
-// Subscribe to pending AI news and pending company listings for preview/approval
 function subscribeToPendingItems() {
     const pendingNewsRef = collection(db, 'artifacts', appId, 'pending', 'market', 'news');
     onSnapshot(pendingNewsRef, (snapshot) => {
@@ -439,7 +437,6 @@ function subscribeToPendingItems() {
     });
 }
 
-// Handle approve/reject clicks (event delegation)
 document.addEventListener('click', async (e) => {
     if (e.target.classList.contains('approve-news-btn')) {
         const id = e.target.dataset.id;
@@ -447,7 +444,6 @@ document.addEventListener('click', async (e) => {
         const snap = await getDoc(pendingRef);
         if (!snap.exists()) return showAdminMessage('Pending item not found.', true);
         const item = snap.data();
-        // publish to news
         await addDoc(collection(db, `artifacts/${appId}/public/market/news`), { ...item, timestamp: serverTimestamp(), is_active: true, source: 'ai' });
         await deleteDoc(pendingRef);
         showAdminMessage('News approved and published.');

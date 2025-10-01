@@ -59,8 +59,6 @@ exports.gameUpdateTicker = onSchedule("every 5 minutes", async (event) => {
             logger.log("Running hourly task: clearing old news.");
             await clearOldNews();
         }
-
-        // Occasionally list a new company: 10% chance on each scheduled run
         try {
             const chance = (aiSettings.listing_probability ?? 0.10);
             if (Math.random() < chance) {
@@ -99,7 +97,6 @@ exports.processAdminAction = onDocumentCreated('artifacts/stock-market-game-v1/a
     logger.log(`Processing admin action ${id}:`, data);
 
     const actionRef = db.doc(`artifacts/stock-market-game-v1/admin_actions/${id}`);
-    // Record that processing started
     try {
         await actionRef.update({ last_attempt: new Date(), last_step: 'started', last_data: data }).catch(() => null);
     } catch (e) { /* ignore */ }
